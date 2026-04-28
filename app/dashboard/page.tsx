@@ -57,7 +57,7 @@ interface DashboardData {
   session: SessionInfo;
   account: AccountInfo | null;
   positions: Position[];
-  config: { minScore: number; capital: number; symbols: string[]; leverage: number };
+  config: { minScore: number; capital: number; symbols: string[]; leverage: number; botEnabled: boolean };
   recentTrades: Trade[];
   latestSignals: Record<string, SignalLog>;
   signalLogs: SignalLog[];
@@ -111,6 +111,7 @@ export default function Dashboard() {
   const [editCapital, setEditCapital] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState("");
+  const [togglingBot, setTogglingBot] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -139,6 +140,22 @@ export default function Dashboard() {
       setEditCapital(String(data.config.capital));
     }
   }, [data?.config.minScore, data?.config.capital]);
+
+  const toggleBot = async () => {
+    if (!data) return;
+    const newVal = data.config.botEnabled ? "false" : "true";
+    setTogglingBot(true);
+    try {
+      await fetch("/api/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: "bot_enabled", value: newVal }),
+      });
+      await fetchData();
+    } finally {
+      setTogglingBot(false);
+    }
+  };
 
   const saveConfig = async (key: string, value: string) => {
     setSaving(true);
@@ -190,14 +207,31 @@ export default function Dashboard() {
           </h1>
           <p style={{ color: "#6b7280", fontSize: 11 }}>Automated Perpetual Futures Bot — Bitunix</p>
         </div>
-        <div style={{ textAlign: "right" }}>
-          <SessionBadge session={data.session} />
-          <p style={{ color: "#6b7280", fontSize: 10, marginTop: 4 }}>
-            UTC {data.session.utcHour}:xx &nbsp; Last refresh: {lastRefresh}
+        <div style={{ textAlign: "right", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <SessionBadge session={data.session} />
+            <button
+              onClick={toggleBot}
+              disabled={togglingBot}
+              style={{
+                background: data.config.botEnabled ? "#064e3b" : "#450a0a",
+                color: data.config.botEnabled ? "#10b981" : "#ef4444",
+                border: `1px solid ${data.config.botEnabled ? "#10b981" : "#ef4444"}`,
+                borderRadius: 6,
+                padding: "4px 14px",
+                fontWeight: 800,
+                fontSize: 12,
+                cursor: "pointer",
+                letterSpacing: "0.05em",
+              }}
+            >
+              {togglingBot ? "..." : data.config.botEnabled ? "BOT ON" : "BOT OFF"}
+            </button>
+          </div>
+          <p style={{ color: "#6b7280", fontSize: 10 }}>
+            UTC {data.session.utcHour}:xx &nbsp;|&nbsp; {lastRefresh}
           </p>
-          <button style={{ marginTop: 6, fontSize: 10, padding: "3px 10px" }} onClick={fetchData}>
-            Refresh
-          </button>
+          <button style={{ fontSize: 10, padding: "3px 10px" }} onClick={fetchData}>Refresh</button>
         </div>
       </div>
 

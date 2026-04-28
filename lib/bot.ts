@@ -30,6 +30,14 @@ export async function runBotForSymbol(symbol: string): Promise<BotRunResult> {
   const ts = new Date().toISOString();
   const result: BotRunResult = { symbol, action: "NONE", details: {}, timestamp: ts };
 
+  // 0. Kill switch — si bot_enabled = "false", no operar
+  const botEnabled = await getBotConfig("bot_enabled");
+  if (botEnabled === "false") {
+    result.action = "BOT_DISABLED";
+    result.details = { reason: "Kill switch activo — reactivar desde el dashboard" };
+    return result;
+  }
+
   // 1. Verificar sesión
   const session = getCurrentSession();
   if (!session.active) {

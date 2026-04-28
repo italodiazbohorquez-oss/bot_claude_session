@@ -3,7 +3,7 @@ import { getBotConfig, setBotConfig } from "@/lib/supabase";
 
 export const runtime = "nodejs";
 
-const ALLOWED_KEYS = ["capital", "min_score", "risk_per_trade", "symbols"];
+const ALLOWED_KEYS = ["capital", "min_score", "risk_per_trade", "symbols", "bot_enabled"];
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -22,6 +22,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid key" }, { status: 400 });
     }
     const strValue = String(value);
+
+    // bot_enabled accepts "true"/"false" only
+    if (key === "bot_enabled" && !["true", "false"].includes(strValue)) {
+      return NextResponse.json({ error: "bot_enabled must be true or false" }, { status: 400 });
+    }
 
     // Validate numeric keys
     if (["capital", "min_score", "risk_per_trade"].includes(key)) {

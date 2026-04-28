@@ -4,8 +4,15 @@ import type { Candle } from "./math";
 const BASE_URL = "https://fapi.bitunix.com";
 const MAX_RETRIES = 3;
 
-function sign(secret: string, message: string): string {
-  return crypto.createHmac("sha256", secret).update(message).digest("hex");
+function buildSignature(apiKey: string, apiSecret: string, nonce: string, timestamp: string, qs: string, bodyStr: string): string {
+  // Stage 1: SHA256(nonce + timestamp + apiKey + queryParams + bodyJson)
+  const digest = crypto.createHash("sha256")
+    .update(nonce + timestamp + apiKey + qs + bodyStr)
+    .digest("hex");
+  // Stage 2: SHA256(digest + secretKey)
+  return crypto.createHash("sha256")
+    .update(digest + apiSecret)
+    .digest("hex");
 }
 
 function buildQueryString(params: Record<string, string | number>): string {
@@ -25,16 +32,15 @@ async function request<T>(
   const apiKey = process.env.BITUNIX_API_KEY ?? "";
   const apiSecret = process.env.BITUNIX_API_SECRET ?? "";
   const timestamp = Date.now().toString();
-  const nonce = Math.random().toString(36).substring(2, 10);
+  const nonce = crypto.randomBytes(16).toString("hex");
 
   let url = `${BASE_URL}${path}`;
-  let headers: Record<string, string> = { "Content-Type": "application/json" };
+  let headers: Record<string, string> = { "Content-Type": "application/json", "language": "en-US" };
 
   if (requiresAuth) {
     const qs = buildQueryString(params);
     const bodyStr = method === "POST" ? JSON.stringify(body) : "";
-    const signStr = `${nonce}${timestamp}${apiKey}${qs}${bodyStr}`;
-    const signature = sign(apiSecret, signStr);
+    const signature = buildSignature(apiKey, apiSecret, nonce, timestamp, qs, bodyStr);
 
     headers = {
       ...headers,

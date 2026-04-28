@@ -9,11 +9,12 @@ export async function GET(_req: NextRequest) {
   const session = getCurrentSession();
   const symbols = (process.env.SYMBOLS ?? "BTCUSDT,ETHUSDT").split(",").map(s => s.trim());
 
-  const [recentTrades, signalLogs, minScoreDb, capitalDb] = await Promise.allSettled([
+  const [recentTrades, signalLogs, minScoreDb, capitalDb, botEnabledDb] = await Promise.allSettled([
     getRecentTrades(10),
     getSignalLogs(20),
     getBotConfig("min_score"),
     getBotConfig("capital"),
+    getBotConfig("bot_enabled"),
   ]);
 
   const minScore = minScoreDb.status === "fulfilled" && minScoreDb.value
@@ -23,6 +24,10 @@ export async function GET(_req: NextRequest) {
   const capital = capitalDb.status === "fulfilled" && capitalDb.value
     ? parseFloat(capitalDb.value)
     : parseFloat(process.env.CAPITAL ?? "1000");
+
+  const botEnabled = botEnabledDb.status === "fulfilled"
+    ? (botEnabledDb.value !== "false")
+    : true;
 
   // Fetch account & positions
   let account = null;
@@ -56,7 +61,7 @@ export async function GET(_req: NextRequest) {
     session,
     account,
     positions,
-    config: { minScore, capital, symbols, leverage: parseInt(process.env.LEVERAGE ?? "5") },
+    config: { minScore, capital, symbols, leverage: parseInt(process.env.LEVERAGE ?? "5"), botEnabled },
     recentTrades: recentTrades.status === "fulfilled" ? recentTrades.value : [],
     latestSignals,
     signalLogs: logs.slice(0, 10),
