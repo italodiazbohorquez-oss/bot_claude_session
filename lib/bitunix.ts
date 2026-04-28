@@ -81,7 +81,7 @@ function sleep(ms: number): Promise<void> {
 export type TimeFrame = "1m" | "5m" | "15m" | "30m" | "1h" | "4h" | "1d";
 
 interface RawKline {
-  time: number;
+  time: string | number;
   open: string;
   high: string;
   low: string;
@@ -98,7 +98,7 @@ export async function getCandles(symbol: string, interval: TimeFrame, limit = 20
   }, {}, false);
 
   return raw.map(k => ({
-    timestamp: k.time,
+    timestamp: Number(k.time),
     open: parseFloat(k.open),
     high: parseFloat(k.high),
     low: parseFloat(k.low),
