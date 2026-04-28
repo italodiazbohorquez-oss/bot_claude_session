@@ -80,30 +80,21 @@ function sleep(ms: number): Promise<void> {
 // ── Candles
 export type TimeFrame = "1m" | "5m" | "15m" | "30m" | "1h" | "4h" | "1d";
 
-const TF_TO_PERIOD: Record<TimeFrame, string> = {
-  "1m":  "1",
-  "5m":  "5",
-  "15m": "15",
-  "30m": "30",
-  "1h":  "60",
-  "4h":  "240",
-  "1d":  "D",
-};
-
 interface RawKline {
   time: number;
   open: string;
   high: string;
   low: string;
   close: string;
-  volume: string;
+  baseVol: string;
+  quoteVol: string;
 }
 
 export async function getCandles(symbol: string, interval: TimeFrame, limit = 200): Promise<Candle[]> {
-  const raw = await request<RawKline[]>("GET", "/api/v1/futures/kline", {
+  const raw = await request<RawKline[]>("GET", "/api/v1/futures/market/kline", {
     symbol,
-    period: TF_TO_PERIOD[interval],
-    size: limit,
+    interval,
+    limit,
   }, {}, false);
 
   return raw.map(k => ({
@@ -112,7 +103,7 @@ export async function getCandles(symbol: string, interval: TimeFrame, limit = 20
     high: parseFloat(k.high),
     low: parseFloat(k.low),
     close: parseFloat(k.close),
-    volume: parseFloat(k.volume),
+    volume: parseFloat(k.baseVol),
   })).sort((a, b) => a.timestamp - b.timestamp);
 }
 
