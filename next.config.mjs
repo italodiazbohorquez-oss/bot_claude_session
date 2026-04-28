@@ -1,9 +1,5 @@
-import type { NextConfig } from "next";
-
-const nextConfig: NextConfig = {
-  experimental: {
-    serverActions: { allowedOrigins: ["*"] },
-  },
+/** @type {import('next').NextConfig} */
+const nextConfig = {
   env: {
     CAPITAL: process.env.CAPITAL ?? "1000",
     LEVERAGE: process.env.LEVERAGE ?? "5",

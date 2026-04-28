@@ -4,14 +4,7 @@ import { runBotForSymbol } from "@/lib/bot";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-export async function GET(req: NextRequest) {
-  // Verify Vercel Cron secret
-  const authHeader = req.headers.get("authorization");
-  const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+export async function GET(_req: NextRequest) {
   const symbolsEnv = process.env.SYMBOLS ?? "BTCUSDT,ETHUSDT";
   const symbols = symbolsEnv.split(",").map(s => s.trim()).filter(Boolean);
 
