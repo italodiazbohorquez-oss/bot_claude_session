@@ -1,0 +1,227 @@
+import crypto from "crypto";
+import type { Candle } from "./math";
+
+const BASE_URL = "https://fapi.bitunix.com";
+const MAX_RETRIES = 3;
+
+function sign(secret: string, message: string): string {
+  return crypto.createHmac("sha256", secret).update(message).digest("hex");
+}
+
+function buildQueryString(params: Record<string, string | number>): string {
+  return Object.entries(params)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([k, v]) => `${k}=${v}`)
+    .join("&");
+}
+
+async function request<T>(
+  method: "GET" | "POST",
+  path: string,
+  params: Record<string, string | number> = {},
+  body: Record<string, unknown> = {},
+  requiresAuth = true
+): Promise<T> {
+  const apiKey = process.env.BITUNIX_API_KEY ?? "";
+  const apiSecret = process.env.BITUNIX_API_SECRET ?? "";
+  const timestamp = Date.now().toString();
+  const nonce = Math.random().toString(36).substring(2, 10);
+
+  let url = `${BASE_URL}${path}`;
+  let headers: Record<string, string> = { "Content-Type": "application/json" };
+
+  if (requiresAuth) {
+    const qs = buildQueryString(params);
+    const bodyStr = method === "POST" ? JSON.stringify(body) : "";
+    const signStr = `${nonce}${timestamp}${apiKey}${qs}${bodyStr}`;
+    const signature = sign(apiSecret, signStr);
+
+    headers = {
+      ...headers,
+      "api-key": apiKey,
+      "sign": signature,
+      "timestamp": timestamp,
+      "nonce": nonce,
+    };
+  }
+
+  if (method === "GET" && Object.keys(params).length > 0) {
+    url += "?" + buildQueryString(params);
+  }
+
+  let lastError: Error = new Error("Unknown error");
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    if (attempt > 0) await sleep(Math.pow(2, attempt) * 1000);
+    try {
+      const res = await fetch(url, {
+        method,
+        headers,
+        body: method === "POST" ? JSON.stringify(body) : undefined,
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+      const data = await res.json();
+      if (data.code !== 0 && data.code !== undefined) {
+        throw new Error(`Bitunix API error ${data.code}: ${data.msg}`);
+      }
+      return data.data as T;
+    } catch (e) {
+      lastError = e instanceof Error ? e : new Error(String(e));
+      console.error(`[Bitunix] attempt ${attempt + 1} failed: ${lastError.message}`);
+    }
+  }
+  throw lastError;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(r => setTimeout(r, ms));
+}
+
+// ── Candles
+export type TimeFrame = "1m" | "5m" | "15m" | "30m" | "1h" | "4h" | "1d";
+
+interface RawKline {
+  time: number;
+  open: string;
+  high: string;
+  low: string;
+  close: string;
+  volume: string;
+}
+
+export async function getCandles(symbol: string, interval: TimeFrame, limit = 200): Promise<Candle[]> {
+  const raw = await request<RawKline[]>("GET", "/api/v1/futures/kline", {
+    symbol,
+    interval,
+    limit,
+  }, {}, false);
+
+  return raw.map(k => ({
+    timestamp: k.time,
+    open: parseFloat(k.open),
+    high: parseFloat(k.high),
+    low: parseFloat(k.low),
+    close: parseFloat(k.close),
+    volume: parseFloat(k.volume),
+  })).sort((a, b) => a.timestamp - b.timestamp);
+}
+
+// ── Ticker
+interface RawTicker {
+  symbol: string;
+  lastPrice: string;
+  markPrice: string;
+  indexPrice: string;
+  volume24h: string;
+}
+
+export async function getTicker(symbol: string): Promise<{ lastPrice: number; markPrice: number }> {
+  const data = await request<RawTicker>("GET", "/api/v1/futures/ticker", { symbol }, {}, false);
+  return {
+    lastPrice: parseFloat(data.lastPrice),
+    markPrice: parseFloat(data.markPrice),
+  };
+}
+
+// ── Account balance
+interface RawAccount {
+  available: string;
+  equity: string;
+  unrealizedPnl: string;
+}
+
+export async function getAccount(): Promise<{ available: number; equity: number; unrealizedPnl: number }> {
+  const data = await request<RawAccount>("GET", "/api/v1/futures/account", {});
+  return {
+    available: parseFloat(data.available),
+    equity: parseFloat(data.equity),
+    unrealizedPnl: parseFloat(data.unrealizedPnl),
+  };
+}
+
+// ── Positions
+interface RawPosition {
+  symbol: string;
+  side: string;
+  size: string;
+  entryPrice: string;
+  unrealizedPnl: string;
+  leverage: string;
+}
+
+export interface Position {
+  symbol: string;
+  side: "LONG" | "SHORT";
+  size: number;
+  entryPrice: number;
+  unrealizedPnl: number;
+  leverage: number;
+}
+
+export async function getPosition(symbol: string): Promise<Position | null> {
+  const data = await request<RawPosition[]>("GET", "/api/v1/futures/position", { symbol });
+  const pos = data.find(p => p.symbol === symbol && parseFloat(p.size) > 0);
+  if (!pos) return null;
+  return {
+    symbol: pos.symbol,
+    side: pos.side === "BUY" ? "LONG" : "SHORT",
+    size: parseFloat(pos.size),
+    entryPrice: parseFloat(pos.entryPrice),
+    unrealizedPnl: parseFloat(pos.unrealizedPnl),
+    leverage: parseFloat(pos.leverage),
+  };
+}
+
+// ── Orders
+export interface OrderParams {
+  symbol: string;
+  side: "BUY" | "SELL";
+  positionSide: "LONG" | "SHORT";
+  type: "MARKET" | "LIMIT" | "STOP_MARKET" | "TAKE_PROFIT_MARKET";
+  quantity: number;
+  price?: number;
+  stopPrice?: number;
+  reduceOnly?: boolean;
+  timeInForce?: "GTC" | "IOC" | "FOK";
+}
+
+interface RawOrder {
+  orderId: string;
+  symbol: string;
+  status: string;
+}
+
+export async function placeOrder(params: OrderParams): Promise<string> {
+  if (process.env.IS_TESTNET === "true") {
+    console.log("[TESTNET] Would place order:", JSON.stringify(params));
+    return `testnet-${Date.now()}`;
+  }
+
+  const body: Record<string, unknown> = {
+    symbol: params.symbol,
+    side: params.side,
+    positionSide: params.positionSide,
+    type: params.type,
+    qty: params.quantity.toString(),
+    reduceOnly: params.reduceOnly ?? false,
+  };
+  if (params.price !== undefined) body.price = params.price.toString();
+  if (params.stopPrice !== undefined) body.stopPrice = params.stopPrice.toString();
+  if (params.timeInForce) body.timeInForce = params.timeInForce;
+
+  const data = await request<RawOrder>("POST", "/api/v1/futures/order", {}, body);
+  return data.orderId;
+}
+
+export async function cancelOrder(symbol: string, orderId: string): Promise<void> {
+  if (process.env.IS_TESTNET === "true") {
+    console.log("[TESTNET] Would cancel order:", orderId);
+    return;
+  }
+  await request("POST", "/api/v1/futures/order/cancel", {}, { symbol, orderId });
+}
+
+export async function setLeverage(symbol: string, leverage: number): Promise<void> {
+  if (process.env.IS_TESTNET === "true") return;
+  await request("POST", "/api/v1/futures/leverage", {}, { symbol, leverage: leverage.toString() });
+}

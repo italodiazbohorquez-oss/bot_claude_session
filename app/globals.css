@@ -1,0 +1,92 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #0a0e1a;
+  --surface: #111827;
+  --surface2: #1f2937;
+  --border: #374151;
+  --text: #f9fafb;
+  --text2: #9ca3af;
+  --green: #10b981;
+  --red: #ef4444;
+  --yellow: #f59e0b;
+  --blue: #3b82f6;
+  --purple: #8b5cf6;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+a { color: var(--blue); text-decoration: none; }
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+.badge-green  { background: #064e3b; color: var(--green); }
+.badge-red    { background: #450a0a; color: var(--red); }
+.badge-yellow { background: #451a03; color: var(--yellow); }
+.badge-blue   { background: #1e3a5f; color: var(--blue); }
+.badge-gray   { background: var(--surface2); color: var(--text2); }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--border); }
+th { color: var(--text2); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 600; }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: var(--surface2); }
+
+.positive { color: var(--green); }
+.negative { color: var(--red); }
+.neutral  { color: var(--text2); }
+
+input[type="number"], input[type="text"] {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  padding: 6px 10px;
+  font-family: inherit;
+  font-size: 13px;
+  width: 100%;
+}
+input:focus { outline: 1px solid var(--blue); border-color: var(--blue); }
+
+button {
+  background: var(--blue);
+  border: none;
+  border-radius: 4px;
+  color: white;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 14px;
+  transition: opacity 0.15s;
+}
+button:hover { opacity: 0.85; }
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.label { color: var(--text2); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px; }
+.value { font-size: 18px; font-weight: 700; }
+.value-sm { font-size: 14px; font-weight: 600; }
