@@ -6,6 +6,7 @@ const MAX_RETRIES = 3;
 
 function buildSignature(apiKey: string, apiSecret: string, nonce: string, timestamp: string, qs: string, bodyStr: string): string {
   // Stage 1: SHA256(nonce + timestamp + apiKey + queryParams + bodyJson)
+  // queryParams format: key+value concatenated (NO = or &), sorted ascending by key
   const digest = crypto.createHash("sha256")
     .update(nonce + timestamp + apiKey + qs + bodyStr)
     .digest("hex");
@@ -15,11 +16,20 @@ function buildSignature(apiKey: string, apiSecret: string, nonce: string, timest
     .digest("hex");
 }
 
+// For URL construction: key=value&key=value
 function buildQueryString(params: Record<string, string | number>): string {
   return Object.entries(params)
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([k, v]) => `${k}=${v}`)
     .join("&");
+}
+
+// For signature: keyValuekeyValue (sorted, no separators) — per Bitunix docs
+function buildSignatureParams(params: Record<string, string | number>): string {
+  return Object.entries(params)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([k, v]) => `${k}${v}`)
+    .join("");
 }
 
 async function request<T>(
@@ -29,18 +39,18 @@ async function request<T>(
   body: Record<string, unknown> = {},
   requiresAuth = true
 ): Promise<T> {
-  const apiKey = process.env.BITUNIX_API_KEY ?? "";
-  const apiSecret = process.env.BITUNIX_API_SECRET ?? "";
+  const apiKey = (process.env.BITUNIX_API_KEY ?? "").trim();
+  const apiSecret = (process.env.BITUNIX_API_SECRET ?? "").trim();
   const timestamp = Date.now().toString();
-  const nonce = crypto.randomBytes(16).toString("hex");
+  const nonce = crypto.randomBytes(8).toString("hex");
 
   let url = `${BASE_URL}${path}`;
   let headers: Record<string, string> = { "Content-Type": "application/json", "language": "en-US" };
 
   if (requiresAuth) {
-    const qs = buildQueryString(params);
+    const sigParams = buildSignatureParams(params);
     const bodyStr = method === "POST" ? JSON.stringify(body) : "";
-    const signature = buildSignature(apiKey, apiSecret, nonce, timestamp, qs, bodyStr);
+    const signature = buildSignature(apiKey, apiSecret, nonce, timestamp, sigParams, bodyStr);
 
     headers = {
       ...headers,
@@ -166,7 +176,7 @@ export interface Position {
 }
 
 export async function getPosition(symbol: string): Promise<Position | null> {
-  const data = await request<RawPosition[]>("GET", "/api/v1/futures/position", { symbol, marginCoin: "USDT" });
+  const data = await request<RawPosition[]>("GET", "/api/v1/futures/position", { symbol });
   const pos = data.find(p => p.symbol === symbol && parseFloat(p.size) > 0);
   if (!pos) return null;
   return {
