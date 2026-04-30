@@ -89,6 +89,26 @@ export async function runBotForSymbol(symbol: string): Promise<BotRunResult> {
     console.error(`[Bot] getPosition error: ${e}`);
   }
 
+  // Fallback: if exchange API fails, reconstruct from Supabase record
+  if (!openPosition) {
+    const dbTrade = await getOpenTrade(symbol);
+    if (dbTrade) {
+      const curClose = candles15m[candles15m.length - 1].close;
+      const priceDiff = dbTrade.side === "LONG"
+        ? curClose - dbTrade.entry_price
+        : dbTrade.entry_price - curClose;
+      openPosition = {
+        symbol,
+        side: dbTrade.side,
+        size: dbTrade.size,
+        entryPrice: dbTrade.entry_price,
+        unrealizedPnl: priceDiff * dbTrade.size,
+        leverage: getEnvNum("LEVERAGE", 5),
+      };
+      console.log(`[Bot] Position from Supabase fallback: ${symbol} ${dbTrade.side} @ ${dbTrade.entry_price}`);
+    }
+  }
+
   if (openPosition) {
     // Gestión por 1H: si el 1H revierte contra la posición, cerrar
     const h1Bull = sqz1h.sqzVal > 0;
