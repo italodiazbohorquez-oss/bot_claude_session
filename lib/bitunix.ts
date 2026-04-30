@@ -175,7 +175,7 @@ export interface Position {
 }
 
 export async function getPosition(symbol: string): Promise<Position | null> {
-  const data = await request<RawPosition[]>("GET", "/api/v1/futures/position", { symbol });
+  const data = await request<RawPosition[]>("GET", "/api/v1/futures/position", { symbol, marginCoin: "USDT" });
   const pos = data.find(p => p.symbol === symbol && parseFloat(p.size) > 0);
   if (!pos) return null;
   return {
@@ -190,7 +190,7 @@ export async function getPosition(symbol: string): Promise<Position | null> {
 
 // Returns raw position response — used by /api/test to debug field names / errors
 export async function getRawPosition(symbol: string): Promise<unknown> {
-  return request<unknown>("GET", "/api/v1/futures/position", { symbol });
+  return request<unknown>("GET", "/api/v1/futures/position", { symbol, marginCoin: "USDT" });
 }
 
 // ── Orders
