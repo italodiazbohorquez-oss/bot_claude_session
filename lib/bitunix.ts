@@ -143,10 +143,12 @@ export async function getTicker(symbol: string): Promise<{ lastPrice: number; ma
 // ── Account balance
 export async function getAccount(): Promise<{ available: number; equity: number; unrealizedPnl: number }> {
   const data = await request<Record<string, string>>("GET", "/api/v1/futures/account", { marginCoin: "USDT" });
-  // Flexible field mapping — expose raw keys so we can see what Bitunix actually returns
-  const available     = parseFloat(data.available     ?? data.crossedAvailable  ?? "0");
-  const equity        = parseFloat(data.equity        ?? data.totalEquity       ?? data.accountEquity ?? data.crossedBalance ?? data.balance ?? "0");
-  const unrealizedPnl = parseFloat(data.unrealizedPnl ?? data.unrealizedPNL    ?? data.crossedUnRealizedPNL ?? data.totalUnrealizedProfit ?? "0");
+  const available     = parseFloat(data.available ?? "0");
+  const margin        = parseFloat(data.margin    ?? "0");
+  const isoUpnl       = parseFloat(data.isolationUnrealizedPNL ?? "0");
+  const crossUpnl     = parseFloat(data.crossUnrealizedPNL    ?? "0");
+  const unrealizedPnl = isoUpnl + crossUpnl;
+  const equity        = available + margin + unrealizedPnl;
   return { available, equity, unrealizedPnl };
 }
 
@@ -175,7 +177,8 @@ export interface Position {
 }
 
 export async function getPosition(symbol: string): Promise<Position | null> {
-  const data = await request<RawPosition[]>("GET", "/api/v1/futures/position", { symbol, marginCoin: "USDT" });
+  // Bitunix returns ALL open positions when called without symbol filter
+  const data = await request<RawPosition[]>("GET", "/api/v1/futures/position", { marginCoin: "USDT" });
   const pos = data.find(p => p.symbol === symbol && parseFloat(p.size) > 0);
   if (!pos) return null;
   return {
@@ -188,9 +191,9 @@ export async function getPosition(symbol: string): Promise<Position | null> {
   };
 }
 
-// Returns raw position response — used by /api/test to debug field names / errors
-export async function getRawPosition(symbol: string): Promise<unknown> {
-  return request<unknown>("GET", "/api/v1/futures/position", { symbol, marginCoin: "USDT" });
+// Returns raw position list — used by /api/test to inspect actual fields
+export async function getRawPosition(_symbol: string): Promise<unknown> {
+  return request<unknown>("GET", "/api/v1/futures/position", { marginCoin: "USDT" });
 }
 
 // ── Orders
