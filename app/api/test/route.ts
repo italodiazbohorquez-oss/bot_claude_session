@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAccount, getRawAccount, getCandles, getPosition, getRawPosition, tryPositionVariants } from "@/lib/bitunix";
+import { getAccount, getRawAccount, getCandles, getPosition, getRawPosition } from "@/lib/bitunix";
 import { calcSqz } from "@/lib/sqz";
 import { calcMtf, countConsecutiveDir } from "@/lib/mtf";
 import { calcRsiSignal, rsiLongSignal, rsiShortSignal } from "@/lib/rsi";
@@ -55,12 +55,6 @@ export async function GET(_req: NextRequest) {
       r.positionRaw = { error: String(e) };
     }
 
-    // Try multiple endpoint/param combinations to find what works
-    try {
-      r.positionVariants = await tryPositionVariants(symbol);
-    } catch (e) {
-      r.positionVariants = { error: String(e) };
-    }
 
     // Candles + signals
     try {

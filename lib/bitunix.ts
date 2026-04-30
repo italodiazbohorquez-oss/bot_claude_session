@@ -160,10 +160,14 @@ export async function getRawAccount(): Promise<Record<string, unknown>> {
 // ── Positions
 interface RawPosition {
   symbol: string;
-  side: string;
+  positionSide: string;   // "LONG" | "SHORT" in HEDGE mode
+  side: string;            // "BUY" | "SELL" (opening side)
   size: string;
-  entryPrice: string;
-  unrealizedPnl: string;
+  qty: string;             // alternate field name
+  openAvgPrice: string;    // entry price (Bitunix naming)
+  entryPrice: string;      // alternate field name
+  unrealizedPNL: string;   // Bitunix uppercase
+  unrealizedPnl: string;   // alternate casing
   leverage: string;
 }
 
@@ -177,82 +181,28 @@ export interface Position {
 }
 
 export async function getPosition(symbol: string): Promise<Position | null> {
-  // Bitunix returns ALL open positions when called without symbol filter
-  const data = await request<RawPosition[]>("GET", "/api/v1/futures/position", { marginCoin: "USDT" });
-  const pos = data.find(p => p.symbol === symbol && parseFloat(p.size) > 0);
+  const data = await request<RawPosition[]>("GET", "/api/v1/futures/position/get_pending_positions", { symbol });
+  if (!data || data.length === 0) return null;
+  const pos = data.find(p => p.symbol === symbol && parseFloat(p.size ?? p.qty ?? "0") > 0);
   if (!pos) return null;
+  const side: "LONG" | "SHORT" = pos.positionSide === "LONG" || pos.positionSide === "SHORT"
+    ? pos.positionSide as "LONG" | "SHORT"
+    : pos.side === "BUY" ? "LONG" : "SHORT";
   return {
     symbol: pos.symbol,
-    side: pos.side === "BUY" ? "LONG" : "SHORT",
-    size: parseFloat(pos.size),
-    entryPrice: parseFloat(pos.entryPrice),
-    unrealizedPnl: parseFloat(pos.unrealizedPnl),
-    leverage: parseFloat(pos.leverage),
+    side,
+    size: parseFloat(pos.size ?? pos.qty ?? "0"),
+    entryPrice: parseFloat(pos.openAvgPrice ?? pos.entryPrice ?? "0"),
+    unrealizedPnl: parseFloat(pos.unrealizedPNL ?? pos.unrealizedPnl ?? "0"),
+    leverage: parseFloat(pos.leverage ?? "1"),
   };
 }
 
 // Returns raw position list — used by /api/test to inspect actual fields
-export async function getRawPosition(_symbol: string): Promise<unknown> {
-  return request<unknown>("GET", "/api/v1/futures/position", { marginCoin: "USDT" });
+export async function getRawPosition(symbol: string): Promise<unknown> {
+  return request<unknown>("GET", "/api/v1/futures/position/get_pending_positions", { symbol });
 }
 
-// Single-attempt request for diagnostics (no retries, no delays)
-async function requestOnce(method: "GET" | "POST", path: string, params: Record<string, string | number> = {}, body: Record<string, unknown> = {}): Promise<unknown> {
-  const apiKey = (process.env.BITUNIX_API_KEY ?? "").trim();
-  const apiSecret = (process.env.BITUNIX_API_SECRET ?? "").trim();
-  const timestamp = Date.now().toString();
-  const nonce = crypto.randomBytes(8).toString("hex");
-  const sigParams = buildSignatureParams(params);
-  const bodyStr = method === "POST" ? JSON.stringify(body) : "";
-  const signature = buildSignature(apiKey, apiSecret, nonce, timestamp, sigParams, bodyStr);
-
-  let url = `${BASE_URL}${path}`;
-  if (method === "GET" && Object.keys(params).length > 0) url += "?" + buildQueryString(params);
-
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    "language": "en-US",
-    "api-key": apiKey,
-    "sign": signature,
-    "timestamp": timestamp,
-    "nonce": nonce,
-  };
-
-  const res = await fetch(url, {
-    method,
-    headers,
-    body: method === "POST" ? JSON.stringify(body) : undefined,
-    signal: AbortSignal.timeout(8000),
-  });
-  const raw = await res.json();
-  return raw; // return full response including code/msg for diagnostics
-}
-
-// Tries multiple endpoint/param combos to find what works — diagnostic only
-export async function tryPositionVariants(symbol: string): Promise<Record<string, unknown>> {
-  const results: Record<string, unknown> = {};
-
-  const variants: Array<{ label: string; method: "GET" | "POST"; path: string; params: Record<string, string | number>; body?: Record<string, unknown> }> = [
-    { label: "GET_noParams",         method: "GET",  path: "/api/v1/futures/position",                    params: {} },
-    { label: "GET_symbolOnly",       method: "GET",  path: "/api/v1/futures/position",                    params: { symbol } },
-    { label: "GET_symbolMarginCoin", method: "GET",  path: "/api/v1/futures/position",                    params: { symbol, marginCoin: "USDT" } },
-    { label: "GET_marginCoinOnly",   method: "GET",  path: "/api/v1/futures/position",                    params: { marginCoin: "USDT" } },
-    { label: "GET_singlePos",        method: "GET",  path: "/api/v1/futures/position/get-single-position", params: { symbol, marginCoin: "USDT" } },
-    { label: "GET_openPositions",    method: "GET",  path: "/api/v1/futures/position/open-positions",      params: { marginCoin: "USDT" } },
-    { label: "POST_symbol",          method: "POST", path: "/api/v1/futures/position",                    params: {}, body: { symbol } },
-    { label: "POST_symbolMarginCoin",method: "POST", path: "/api/v1/futures/position",                    params: {}, body: { symbol, marginCoin: "USDT" } },
-  ];
-
-  for (const v of variants) {
-    try {
-      results[v.label] = await requestOnce(v.method, v.path, v.params, v.body ?? {});
-    } catch (e) {
-      results[v.label] = { error: e instanceof Error ? e.message : String(e) };
-    }
-  }
-
-  return results;
-}
 
 // ── Orders
 export interface OrderParams {
