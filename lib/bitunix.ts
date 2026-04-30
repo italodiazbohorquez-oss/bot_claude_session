@@ -196,6 +196,30 @@ export async function getRawPosition(_symbol: string): Promise<unknown> {
   return request<unknown>("GET", "/api/v1/futures/position", { marginCoin: "USDT" });
 }
 
+// Tries multiple endpoint/param combos to find what works — diagnostic only
+export async function tryPositionVariants(symbol: string): Promise<Record<string, unknown>> {
+  const results: Record<string, unknown> = {};
+
+  const variants: Array<{ label: string; path: string; params: Record<string, string | number> }> = [
+    { label: "noParams",         path: "/api/v1/futures/position",                    params: {} },
+    { label: "symbolOnly",       path: "/api/v1/futures/position",                    params: { symbol } },
+    { label: "symbolMarginCoin", path: "/api/v1/futures/position",                    params: { symbol, marginCoin: "USDT" } },
+    { label: "singlePos",        path: "/api/v1/futures/position/get-single-position", params: { symbol, marginCoin: "USDT" } },
+    { label: "singlePosNoMC",    path: "/api/v1/futures/position/get-single-position", params: { symbol } },
+    { label: "pending",          path: "/api/v1/futures/position/pending",             params: { symbol, marginCoin: "USDT" } },
+  ];
+
+  for (const v of variants) {
+    try {
+      results[v.label] = await request<unknown>("GET", v.path, v.params);
+    } catch (e) {
+      results[v.label] = { error: e instanceof Error ? e.message : String(e) };
+    }
+  }
+
+  return results;
+}
+
 // ── Orders
 export interface OrderParams {
   symbol: string;
