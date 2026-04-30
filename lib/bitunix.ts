@@ -141,19 +141,18 @@ export async function getTicker(symbol: string): Promise<{ lastPrice: number; ma
 }
 
 // ── Account balance
-interface RawAccount {
-  available: string;
-  equity: string;
-  unrealizedPnl: string;
+export async function getAccount(): Promise<{ available: number; equity: number; unrealizedPnl: number }> {
+  const data = await request<Record<string, string>>("GET", "/api/v1/futures/account", { marginCoin: "USDT" });
+  // Flexible field mapping — expose raw keys so we can see what Bitunix actually returns
+  const available     = parseFloat(data.available     ?? data.crossedAvailable  ?? "0");
+  const equity        = parseFloat(data.equity        ?? data.totalEquity       ?? data.accountEquity ?? data.crossedBalance ?? data.balance ?? "0");
+  const unrealizedPnl = parseFloat(data.unrealizedPnl ?? data.unrealizedPNL    ?? data.crossedUnRealizedPNL ?? data.totalUnrealizedProfit ?? "0");
+  return { available, equity, unrealizedPnl };
 }
 
-export async function getAccount(): Promise<{ available: number; equity: number; unrealizedPnl: number }> {
-  const data = await request<RawAccount>("GET", "/api/v1/futures/account", { marginCoin: "USDT" });
-  return {
-    available: parseFloat(data.available),
-    equity: parseFloat(data.equity),
-    unrealizedPnl: parseFloat(data.unrealizedPnl),
-  };
+// Returns the raw account response — used by /api/test for field discovery
+export async function getRawAccount(): Promise<Record<string, unknown>> {
+  return request<Record<string, unknown>>("GET", "/api/v1/futures/account", { marginCoin: "USDT" });
 }
 
 // ── Positions
@@ -187,6 +186,11 @@ export async function getPosition(symbol: string): Promise<Position | null> {
     unrealizedPnl: parseFloat(pos.unrealizedPnl),
     leverage: parseFloat(pos.leverage),
   };
+}
+
+// Returns raw position response — used by /api/test to debug field names / errors
+export async function getRawPosition(symbol: string): Promise<unknown> {
+  return request<unknown>("GET", "/api/v1/futures/position", { symbol });
 }
 
 // ── Orders

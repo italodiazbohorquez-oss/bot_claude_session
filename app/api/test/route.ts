@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAccount, getCandles, getPosition } from "@/lib/bitunix";
+import { getAccount, getRawAccount, getCandles, getPosition, getRawPosition } from "@/lib/bitunix";
 import { calcSqz } from "@/lib/sqz";
 import { calcMtf, countConsecutiveDir } from "@/lib/mtf";
 import { calcRsiSignal, rsiLongSignal, rsiShortSignal } from "@/lib/rsi";
@@ -12,13 +12,21 @@ export const runtime = "nodejs";
 export async function GET(_req: NextRequest) {
   const ts = new Date().toISOString();
 
-  // Account test
+  // Account test — mapped fields
   let account: Record<string, unknown> = { ok: false };
   try {
     const acc = await getAccount();
     account = { ok: true, equity: acc.equity, available: acc.available, unrealizedPnl: acc.unrealizedPnl };
   } catch (e) {
     account = { ok: false, error: String(e) };
+  }
+
+  // Raw account — reveals actual field names from Bitunix
+  let accountRaw: unknown = null;
+  try {
+    accountRaw = await getRawAccount();
+  } catch (e) {
+    accountRaw = { error: String(e) };
   }
 
   const session = getCurrentSession();
@@ -32,12 +40,19 @@ export async function GET(_req: NextRequest) {
   for (const symbol of symbols) {
     const r: Record<string, unknown> = {};
 
-    // Position
+    // Position (mapped)
     try {
       const pos = await getPosition(symbol);
       r.position = pos ?? "NONE";
     } catch (e) {
       r.position = { error: String(e) };
+    }
+
+    // Raw position — reveals actual Bitunix response / fields
+    try {
+      r.positionRaw = await getRawPosition(symbol);
+    } catch (e) {
+      r.positionRaw = { error: String(e) };
     }
 
     // Candles + signals
@@ -130,6 +145,7 @@ export async function GET(_req: NextRequest) {
     timestamp: ts,
     session,
     account,
+    accountRaw,
     botEnabled,
     minScore,
     symbols: symbolsResult,
