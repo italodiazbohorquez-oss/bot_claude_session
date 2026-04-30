@@ -138,7 +138,7 @@ interface RawAccount {
 }
 
 export async function getAccount(): Promise<{ available: number; equity: number; unrealizedPnl: number }> {
-  const data = await request<RawAccount>("GET", "/api/v1/futures/account", {});
+  const data = await request<RawAccount>("GET", "/api/v1/futures/account", { marginCoin: "USDT" });
   return {
     available: parseFloat(data.available),
     equity: parseFloat(data.equity),
@@ -166,7 +166,7 @@ export interface Position {
 }
 
 export async function getPosition(symbol: string): Promise<Position | null> {
-  const data = await request<RawPosition[]>("GET", "/api/v1/futures/position", { symbol });
+  const data = await request<RawPosition[]>("GET", "/api/v1/futures/position", { symbol, marginCoin: "USDT" });
   const pos = data.find(p => p.symbol === symbol && parseFloat(p.size) > 0);
   if (!pos) return null;
   return {
