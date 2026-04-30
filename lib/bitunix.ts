@@ -196,22 +196,56 @@ export async function getRawPosition(_symbol: string): Promise<unknown> {
   return request<unknown>("GET", "/api/v1/futures/position", { marginCoin: "USDT" });
 }
 
+// Single-attempt request for diagnostics (no retries, no delays)
+async function requestOnce(method: "GET" | "POST", path: string, params: Record<string, string | number> = {}, body: Record<string, unknown> = {}): Promise<unknown> {
+  const apiKey = (process.env.BITUNIX_API_KEY ?? "").trim();
+  const apiSecret = (process.env.BITUNIX_API_SECRET ?? "").trim();
+  const timestamp = Date.now().toString();
+  const nonce = crypto.randomBytes(8).toString("hex");
+  const sigParams = buildSignatureParams(params);
+  const bodyStr = method === "POST" ? JSON.stringify(body) : "";
+  const signature = buildSignature(apiKey, apiSecret, nonce, timestamp, sigParams, bodyStr);
+
+  let url = `${BASE_URL}${path}`;
+  if (method === "GET" && Object.keys(params).length > 0) url += "?" + buildQueryString(params);
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    "language": "en-US",
+    "api-key": apiKey,
+    "sign": signature,
+    "timestamp": timestamp,
+    "nonce": nonce,
+  };
+
+  const res = await fetch(url, {
+    method,
+    headers,
+    body: method === "POST" ? JSON.stringify(body) : undefined,
+    signal: AbortSignal.timeout(8000),
+  });
+  const raw = await res.json();
+  return raw; // return full response including code/msg for diagnostics
+}
+
 // Tries multiple endpoint/param combos to find what works — diagnostic only
 export async function tryPositionVariants(symbol: string): Promise<Record<string, unknown>> {
   const results: Record<string, unknown> = {};
 
-  const variants: Array<{ label: string; path: string; params: Record<string, string | number> }> = [
-    { label: "noParams",         path: "/api/v1/futures/position",                    params: {} },
-    { label: "symbolOnly",       path: "/api/v1/futures/position",                    params: { symbol } },
-    { label: "symbolMarginCoin", path: "/api/v1/futures/position",                    params: { symbol, marginCoin: "USDT" } },
-    { label: "singlePos",        path: "/api/v1/futures/position/get-single-position", params: { symbol, marginCoin: "USDT" } },
-    { label: "singlePosNoMC",    path: "/api/v1/futures/position/get-single-position", params: { symbol } },
-    { label: "pending",          path: "/api/v1/futures/position/pending",             params: { symbol, marginCoin: "USDT" } },
+  const variants: Array<{ label: string; method: "GET" | "POST"; path: string; params: Record<string, string | number>; body?: Record<string, unknown> }> = [
+    { label: "GET_noParams",         method: "GET",  path: "/api/v1/futures/position",                    params: {} },
+    { label: "GET_symbolOnly",       method: "GET",  path: "/api/v1/futures/position",                    params: { symbol } },
+    { label: "GET_symbolMarginCoin", method: "GET",  path: "/api/v1/futures/position",                    params: { symbol, marginCoin: "USDT" } },
+    { label: "GET_marginCoinOnly",   method: "GET",  path: "/api/v1/futures/position",                    params: { marginCoin: "USDT" } },
+    { label: "GET_singlePos",        method: "GET",  path: "/api/v1/futures/position/get-single-position", params: { symbol, marginCoin: "USDT" } },
+    { label: "GET_openPositions",    method: "GET",  path: "/api/v1/futures/position/open-positions",      params: { marginCoin: "USDT" } },
+    { label: "POST_symbol",          method: "POST", path: "/api/v1/futures/position",                    params: {}, body: { symbol } },
+    { label: "POST_symbolMarginCoin",method: "POST", path: "/api/v1/futures/position",                    params: {}, body: { symbol, marginCoin: "USDT" } },
   ];
 
   for (const v of variants) {
     try {
-      results[v.label] = await request<unknown>("GET", v.path, v.params);
+      results[v.label] = await requestOnce(v.method, v.path, v.params, v.body ?? {});
     } catch (e) {
       results[v.label] = { error: e instanceof Error ? e.message : String(e) };
     }
