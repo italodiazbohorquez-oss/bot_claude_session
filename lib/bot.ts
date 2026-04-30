@@ -169,35 +169,38 @@ export async function runBotForSymbol(symbol: string): Promise<BotRunResult> {
 
   // ── FILTROS DE ENTRADA ──────────────────────────────────────────────────────
 
-  // Gatillo 5M: el 5M debe confirmar la dirección
+  // Gatillo 5M: bono +1 punto si el 5M confirma dirección (ya no es bloqueo duro)
   const gate5mLong  = sqz5m.sqzVal > 0;
   const gate5mShort = sqz5m.sqzVal < 0;
+  const effectiveScoreLong  = Math.min(9, scoreLong  + (gate5mLong  ? 1 : 0));
+  const effectiveScoreShort = Math.min(9, scoreShort + (gate5mShort ? 1 : 0));
 
   // Persistencia 15M: la señal debe llevar al menos 2 velas 15M consecutivas
   const persist15mLong  = sqz15m.sqzVal > 0 && sqz15mPrev.sqzVal > 0;
   const persist15mShort = sqz15m.sqzVal < 0 && sqz15mPrev.sqzVal < 0;
 
   const canOpenLong =
-    scoreLong >= minScore &&
+    effectiveScoreLong >= minScore &&
     mtf.direction === "LONG" &&
     mtf.canTrade &&
     adxStrength !== "WEAK" &&
     !cerebro.antiTrampaLong &&
-    persist15mLong &&
-    gate5mLong;
+    persist15mLong;
 
   const canOpenShort =
-    scoreShort >= minScore &&
+    effectiveScoreShort >= minScore &&
     mtf.direction === "SHORT" &&
     mtf.canTrade &&
     adxStrength !== "WEAK" &&
     !cerebro.antiTrampaShort &&
-    persist15mShort &&
-    gate5mShort;
+    persist15mShort;
 
   // RSI pivot (señal independiente — también requiere confirmaciones)
-  const rsiLongEntry  = rsiBuySignal  && rsiResult.zoneNumeric <= 45 && mtf.direction === "LONG"  && scoreLong  >= minScore && adxStrength !== "WEAK" && gate5mLong;
-  const rsiShortEntry = rsiSellSignal && rsiResult.zoneNumeric >= 55 && mtf.direction === "SHORT" && scoreShort >= minScore && adxStrength !== "WEAK" && gate5mShort;
+  const rsiLongEntry  = rsiBuySignal  && rsiResult.zoneNumeric <= 45 && mtf.direction === "LONG"  && effectiveScoreLong  >= minScore && adxStrength !== "WEAK";
+  const rsiShortEntry = rsiSellSignal && rsiResult.zoneNumeric >= 55 && mtf.direction === "SHORT" && effectiveScoreShort >= minScore && adxStrength !== "WEAK";
+
+  // Codifica TF directions en mtf_setup para el dashboard (sin cambio de schema)
+  const tfTag = `|${mtf.tf5m}|${mtf.tf15m}|${mtf.tf1h}|${mtf.tf4h}`;
 
   // Log signal
   const signalLog = {
@@ -205,7 +208,7 @@ export async function runBotForSymbol(symbol: string): Promise<BotRunResult> {
     timestamp: ts,
     score_long: scoreLong,
     score_short: scoreShort,
-    mtf_setup: mtf.setup,
+    mtf_setup: `${mtf.setup}${tfTag}`,
     rsi_zone: rsiResult.zoneNumeric,
     rsi_pivot: rsiResult.pivot,
     adx_value: sqz15m.adxValue,
@@ -220,27 +223,50 @@ export async function runBotForSymbol(symbol: string): Promise<BotRunResult> {
 
   if (canOpenLong || rsiLongEntry) {
     side = "LONG";
-    entryScore = scoreLong;
+    entryScore = effectiveScoreLong;
     setupType = rsiLongEntry ? "RSI_PIVOT_LONG" : `CEREBRO_${mtf.setup}_LONG`;
   } else if (canOpenShort || rsiShortEntry) {
     side = "SHORT";
-    entryScore = scoreShort;
+    entryScore = effectiveScoreShort;
     setupType = rsiShortEntry ? "RSI_PIVOT_SHORT" : `CEREBRO_${mtf.setup}_SHORT`;
   }
 
   if (!side) {
-    signalLog.action_taken = "WAIT";
+    // Razón principal de bloqueo para el dashboard
+    const dir = mtf.direction;
+    let blockReason: string;
+    if (dir === "LONG") {
+      if (!mtf.canTrade)                        blockReason = `MTF_${mtf.setup}`;
+      else if (adxStrength === "WEAK")          blockReason = "ADX_WEAK";
+      else if (effectiveScoreLong < minScore)   blockReason = `SCORE_${effectiveScoreLong}<${minScore}`;
+      else if (cerebro.antiTrampaLong)          blockReason = "ANTI_TRAP";
+      else if (!persist15mLong)                 blockReason = "PERSIST_15M";
+      else                                       blockReason = "UNKNOWN";
+    } else if (dir === "SHORT") {
+      if (!mtf.canTrade)                        blockReason = `MTF_${mtf.setup}`;
+      else if (adxStrength === "WEAK")          blockReason = "ADX_WEAK";
+      else if (effectiveScoreShort < minScore)  blockReason = `SCORE_${effectiveScoreShort}<${minScore}`;
+      else if (cerebro.antiTrampaShort)         blockReason = "ANTI_TRAP";
+      else if (!persist15mShort)                blockReason = "PERSIST_15M";
+      else                                       blockReason = "UNKNOWN";
+    } else {
+      blockReason = `MTF_${mtf.setup}`;
+    }
+
+    signalLog.action_taken = `WAIT:${blockReason}`;
     await saveSignalLog(signalLog);
     result.action = "WAIT";
     result.details = {
-      scoreLong, scoreShort,
-      mtfSetup: mtf.setup, mtfDir: mtf.direction,
+      scoreLong, scoreShort, effectiveScoreLong, effectiveScoreShort,
+      mtfSetup: mtf.setup, mtfDir: dir,
+      tf5m: mtf.tf5m, tf15m: mtf.tf15m, tf1h: mtf.tf1h, tf4h: mtf.tf4h,
       adxStrength,
       rsiZone: rsiResult.zone,
-      persist15mLong, persist15mShort,
       gate5mLong, gate5mShort,
+      persist15mLong, persist15mShort,
       antiTrampaLong: cerebro.antiTrampaLong,
       antiTrampaShort: cerebro.antiTrampaShort,
+      blockReason,
     };
     return result;
   }

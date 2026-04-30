@@ -34,8 +34,8 @@ export async function POST(req: NextRequest) {
       if (isNaN(num) || num <= 0) {
         return NextResponse.json({ error: "Value must be a positive number" }, { status: 400 });
       }
-      if (key === "min_score" && (num < 4 || num > 9)) {
-        return NextResponse.json({ error: "min_score must be between 4 and 9" }, { status: 400 });
+      if (key === "min_score" && (num < 2 || num > 9)) {
+        return NextResponse.json({ error: "min_score must be between 2 and 9" }, { status: 400 });
       }
     }
 
