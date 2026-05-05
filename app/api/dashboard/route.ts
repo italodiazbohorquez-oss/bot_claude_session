@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRecentTrades, getSignalLogs, getBotConfig } from "@/lib/supabase";
-import { getAccount, getPosition, getTicker } from "@/lib/bitunix";
+import { getAccount, getAllPositions, getTicker } from "@/lib/bitunix";
 import { getCurrentSession } from "@/lib/sessions";
 
 export const runtime = "nodejs";
@@ -9,7 +9,8 @@ export const revalidate = 0;
 
 export async function GET(_req: NextRequest) {
   const session = getCurrentSession();
-  const symbols = (process.env.SYMBOLS ?? "BTCUSDT,ETHUSDT").split(",").map(s => s.trim());
+  const DEFAULT_SYMBOLS = "BTCUSDT,ETHUSDT,SOLUSDT,ADAUSDT,SUIUSDT,RENDERUSDT,AVAXUSDT,HYPEUSDT,TAOUSDT,DOTUSDT,CRVUSDT,KSMUSDT,HBARUSDT,LINKUSDT,UNIUSDT,BNBUSDT,NEARUSDT,AAVEUSDT,PENGUUSDT";
+  const symbols = (process.env.SYMBOLS ?? DEFAULT_SYMBOLS).split(",").map(s => s.trim());
 
   const [recentTrades, signalLogs, minScoreDb, capitalDb, botEnabledDb] = await Promise.allSettled([
     getRecentTrades(10),
@@ -31,24 +32,32 @@ export async function GET(_req: NextRequest) {
     ? (botEnabledDb.value !== "false")
     : true;
 
-  // Fetch account, positions and live prices in parallel
+  // Fetch account, all positions (1 call), and live prices in parallel
   let account = null;
   const positions: Record<string, unknown>[] = [];
   const prices: Record<string, number> = {};
 
-  try {
-    account = await getAccount();
-  } catch (e) {
-    console.error("[Dashboard] account error:", e);
+  const [accountResult, positionsResult] = await Promise.allSettled([
+    getAccount(),
+    getAllPositions(),
+  ]);
+
+  if (accountResult.status === "fulfilled") {
+    account = accountResult.value;
+  } else {
+    console.error("[Dashboard] account error:", accountResult.reason);
   }
 
-  await Promise.all(symbols.map(async (sym) => {
-    try {
-      const pos = await getPosition(sym);
-      if (pos) positions.push({ ...pos });
-    } catch (e) {
-      console.error(`[Dashboard] position error ${sym}:`, e);
+  if (positionsResult.status === "fulfilled") {
+    for (const pos of positionsResult.value) {
+      if (symbols.includes(pos.symbol)) positions.push({ ...pos });
     }
+  } else {
+    console.error("[Dashboard] positions error:", positionsResult.reason);
+  }
+
+  // Fetch live prices for all symbols in parallel
+  await Promise.all(symbols.map(async (sym) => {
     try {
       const ticker = await getTicker(sym);
       prices[sym] = ticker.lastPrice;

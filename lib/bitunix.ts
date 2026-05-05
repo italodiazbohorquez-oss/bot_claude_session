@@ -181,11 +181,7 @@ export interface Position {
   leverage: number;
 }
 
-export async function getPosition(symbol: string): Promise<Position | null> {
-  const data = await request<RawPosition[]>("GET", "/api/v1/futures/position/get_pending_positions", { symbol });
-  if (!data || data.length === 0) return null;
-  const pos = data.find(p => p.symbol === symbol && parseFloat(p.size ?? p.qty ?? "0") > 0);
-  if (!pos) return null;
+function parseRawPosition(pos: RawPosition): Position {
   const side: "LONG" | "SHORT" = pos.positionSide === "LONG" || pos.positionSide === "SHORT"
     ? pos.positionSide as "LONG" | "SHORT"
     : pos.side === "BUY" ? "LONG" : "SHORT";
@@ -197,6 +193,22 @@ export async function getPosition(symbol: string): Promise<Position | null> {
     unrealizedPnl: parseFloat(pos.unrealizedPNL ?? pos.unrealizedPnl ?? "0"),
     leverage: parseFloat(pos.leverage ?? "1"),
   };
+}
+
+export async function getPosition(symbol: string): Promise<Position | null> {
+  const data = await request<RawPosition[]>("GET", "/api/v1/futures/position/get_pending_positions", { symbol });
+  if (!data || data.length === 0) return null;
+  const pos = data.find(p => p.symbol === symbol && parseFloat(p.size ?? p.qty ?? "0") > 0);
+  return pos ? parseRawPosition(pos) : null;
+}
+
+// Fetch ALL open positions in one call — use in dashboard to avoid N serial calls
+export async function getAllPositions(): Promise<Position[]> {
+  const data = await request<RawPosition[]>("GET", "/api/v1/futures/position/get_pending_positions", {});
+  if (!data || data.length === 0) return [];
+  return data
+    .filter(p => parseFloat(p.size ?? p.qty ?? "0") > 0)
+    .map(parseRawPosition);
 }
 
 // Returns raw position list — used by /api/test to inspect actual fields

@@ -32,7 +32,8 @@ export async function GET(_req: NextRequest) {
   }
 
   const session = getCurrentSession();
-  const symbols = (process.env.SYMBOLS ?? "BTCUSDT,ETHUSDT").split(",").map(s => s.trim());
+  const DEFAULT_SYMBOLS = "BTCUSDT,ETHUSDT,SOLUSDT,ADAUSDT,SUIUSDT,RENDERUSDT,AVAXUSDT,HYPEUSDT,TAOUSDT,DOTUSDT,CRVUSDT,KSMUSDT,HBARUSDT,LINKUSDT,UNIUSDT,BNBUSDT,NEARUSDT,AAVEUSDT,PENGUUSDT";
+  const symbols = (process.env.SYMBOLS ?? DEFAULT_SYMBOLS).split(",").map(s => s.trim());
   const minScoreRaw = await getBotConfig("min_score");
   const minScore = parseFloat(minScoreRaw ?? process.env.MIN_SCORE ?? "4");
   const botEnabled = await getBotConfig("bot_enabled");

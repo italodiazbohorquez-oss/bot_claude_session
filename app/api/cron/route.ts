@@ -7,7 +7,8 @@ export const revalidate = 0;
 export const maxDuration = 60;
 
 export async function GET(_req: NextRequest) {
-  const symbolsEnv = process.env.SYMBOLS ?? "BTCUSDT,ETHUSDT";
+  const DEFAULT_SYMBOLS = "BTCUSDT,ETHUSDT,SOLUSDT,ADAUSDT,SUIUSDT,RENDERUSDT,AVAXUSDT,HYPEUSDT,TAOUSDT,DOTUSDT,CRVUSDT,KSMUSDT,HBARUSDT,LINKUSDT,UNIUSDT,BNBUSDT,NEARUSDT,AAVEUSDT,PENGUUSDT";
+  const symbolsEnv = process.env.SYMBOLS ?? DEFAULT_SYMBOLS;
   const symbols = symbolsEnv.split(",").map(s => s.trim()).filter(Boolean);
 
   const startTime = Date.now();
