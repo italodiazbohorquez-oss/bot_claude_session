@@ -66,7 +66,8 @@ export function calcCerebro(
   sqz4h: SqzResult,
   sqz15m: SqzResult,
   sqz15mPrev: SqzResult,
-  candles1h: Candle[]
+  candles1h: Candle[],
+  sqz5m: SqzResult
 ): CerebroResult {
   const n = candles15m.length;
   const closes = candles15m.map(c => c.close);
@@ -101,7 +102,9 @@ export function calcCerebro(
   const p6_long = curClose > vwapDaily && curClose > vwapWeekly;
   const p6_short = curClose < vwapDaily && curClose < vwapWeekly;
 
-  // ── PUNTO 7 — Delta Z-Score
+  // ── PUNTO 7 — Delta Z-Score fuerte
+  // Pine: delta_positivo = delta_z > 0 AND delta_fuerte = |delta_z| > 1.0
+  // Combined: LONG = delta_z > 1.0, SHORT = delta_z < -1.0
   const opens = candles15m.map(c => c.open);
   const deltaRaw = closes.map((c, i) => (c >= opens[i] ? volumes[i] : -volumes[i]));
   const deltaMean = sma(deltaRaw, 100);
@@ -110,8 +113,8 @@ export function calcCerebro(
   const lastMean = deltaMean[n - 1];
   const lastStd = deltaStd[n - 1];
   const deltaZ = lastStd > 0 ? (lastDelta - lastMean) / lastStd : 0;
-  const p7_long = deltaZ > 0;
-  const p7_short = deltaZ < 0;
+  const p7_long = deltaZ > 1.0;
+  const p7_short = deltaZ < -1.0;
 
   // ── PUNTO 8 — Dirección CVD suavizado
   let cvd = 0;
@@ -123,6 +126,7 @@ export function calcCerebro(
   const p8_short = !isNaN(cvdNow) && !isNaN(cvdPrev) && cvdNow < cvdPrev;
 
   // ── PUNTO 9 — Acción del precio (SFP o rechazo)
+  // Pine: sfp_activo_bull = is_sfp_bull OR is_sfp_bull[1] (current AND previous bar)
   const c = candles15m[n - 1];
   const body = Math.abs(c.close - c.open);
   const lowerWick = Math.min(c.open, c.close) - c.low;
@@ -130,7 +134,7 @@ export function calcCerebro(
   const rechazoBull = lowerWick > body * 1.5;
   const rechazoBear = upperWick > body * 1.5;
 
-  // highest/lowest excluding current candle [1] offset
+  // highest/lowest excluding current candle (high[1] / low[1] in Pine)
   const highsExcl = highs.slice(0, n - 1);
   const lowsExcl = lows.slice(0, n - 1);
   const lastHigh = highsExcl.length >= 20 ? Math.max(...highsExcl.slice(-20)) : Math.max(...highsExcl);
@@ -138,14 +142,24 @@ export function calcCerebro(
 
   const sfpBull = c.low < lastLow && c.close > lastLow && rechazoBull;
   const sfpBear = c.high > lastHigh && c.close < lastHigh && rechazoBear;
-  const p9_long = sfpBull || rechazoBull;
-  const p9_short = sfpBear || rechazoBear;
+
+  // Check previous bar too (is_sfp_bull[1] in Pine)
+  const cp = candles15m[n - 2];
+  const bodyP = Math.abs(cp.close - cp.open);
+  const sfpBullPrev = cp.low < lastLow && cp.close > lastLow && (Math.min(cp.open, cp.close) - cp.low) > bodyP * 1.5;
+  const sfpBearPrev = cp.high > lastHigh && cp.close < lastHigh && (cp.high - Math.max(cp.open, cp.close)) > bodyP * 1.5;
+
+  const p9_long = sfpBull || sfpBullPrev || rechazoBull;
+  const p9_short = sfpBear || sfpBearPrev || rechazoBear;
 
   // ── ANTI-TRAMPA
+  // Pine: giro_alza = sqz > sqz[1] AND sqz < 0 (momentum girando DESDE negativo, en TF rápido)
+  // Usamos 5m como "chart TF" y 15m como referencia de confirmación — igual que el indicador
+  // cuando se ejecuta en 5m con MTF 15m.
   const ema9Arr = ema(closes, 9);
   const ema9Val = ema9Arr[n - 1];
-  const giroAlza = sqz15m.sqzVal > 0 && sqz15mPrev.sqzVal <= 0;
-  const giroBaja = sqz15m.sqzVal < 0 && sqz15mPrev.sqzVal >= 0;
+  const giroAlza = sqz5m.sqzVal > sqz5m.sqzPrevVal && sqz5m.sqzVal < 0;
+  const giroBaja = sqz5m.sqzVal < sqz5m.sqzPrevVal && sqz5m.sqzVal > 0;
   const antiTrampaLong = giroAlza && curClose < ema9Val && sqz15m.sqzVal < sqz15mPrev.sqzVal;
   const antiTrampaShort = giroBaja && curClose > ema9Val && sqz15m.sqzVal > sqz15mPrev.sqzVal;
 

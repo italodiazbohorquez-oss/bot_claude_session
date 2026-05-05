@@ -179,7 +179,7 @@ export async function runBotForSymbol(symbol: string): Promise<BotRunResult> {
   });
 
   // 5. Cerebro score + bonus divergencia RSI
-  const cerebro = calcCerebro(candles15m, sqz1h, sqz4h, sqz15m, sqz15mPrev, candles1h);
+  const cerebro = calcCerebro(candles15m, sqz1h, sqz4h, sqz15m, sqz15mPrev, candles1h, sqz5m);
   let scoreLong  = cerebro.scoreLong;
   let scoreShort = cerebro.scoreShort;
   if (rsiResult.divergence === "BULL") scoreLong  = Math.min(9, scoreLong + 1);
