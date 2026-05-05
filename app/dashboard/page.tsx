@@ -114,18 +114,22 @@ function SetupColor({ setup }: { setup: string }) {
 }
 
 // ── Sidebar ──────────────────────────────────────────────────────
-function Sidebar({ session, config, onToggleBot, toggling }: {
+function Sidebar({ session, config, onToggleBot, toggling, activeSection, onNav }: {
   session: SessionInfo;
   config: { botEnabled: boolean; capital: number };
   onToggleBot: () => void;
   toggling: boolean;
+  activeSection: string;
+  onNav: (id: string) => void;
 }) {
-  const items = [
-    { id: "dash", label: "Overview", icon: "◇", active: true },
+  const botItems = [
+    { id: "dash", label: "Overview", icon: "◇" },
     { id: "pos", label: "Posiciones", icon: "◈" },
     { id: "sig", label: "Señales", icon: "◆" },
     { id: "risk", label: "Risk Mgmt", icon: "◉" },
     { id: "log", label: "Logs", icon: "≡" },
+  ];
+  const sysItems = [
     { id: "set", label: "Config", icon: "⚙" },
   ];
   return (
@@ -142,19 +146,21 @@ function Sidebar({ session, config, onToggleBot, toggling }: {
       </div>
 
       <span className="t-eyebrow" style={{ padding: "6px 8px 3px" }}>Bot</span>
-      {items.slice(0, 5).map(it => (
-        <div key={it.id} className={`nav-item${it.active ? " active" : ""}`}>
+      {botItems.map(it => (
+        <div key={it.id} className={`nav-item${activeSection === it.id ? " active" : ""}`} onClick={() => onNav(it.id)} style={{ cursor: "pointer" }}>
           <div className="row" style={{ gap: 10, alignItems: "center" }}>
-            <span style={{ fontSize: 14, opacity: it.active ? 1 : 0.55 }}>{it.icon}</span>
+            <span style={{ fontSize: 14, opacity: activeSection === it.id ? 1 : 0.55 }}>{it.icon}</span>
             <span>{it.label}</span>
           </div>
         </div>
       ))}
       <span className="t-eyebrow" style={{ padding: "16px 8px 3px" }}>Sistema</span>
-      {items.slice(5).map(it => (
-        <div key={it.id} className="nav-item row" style={{ gap: 10, alignItems: "center" }}>
-          <span style={{ fontSize: 14, opacity: 0.5 }}>{it.icon}</span>
-          <span>{it.label}</span>
+      {sysItems.map(it => (
+        <div key={it.id} className={`nav-item${activeSection === it.id ? " active" : ""}`} onClick={() => onNav(it.id)} style={{ cursor: "pointer" }}>
+          <div className="row" style={{ gap: 10, alignItems: "center" }}>
+            <span style={{ fontSize: 14, opacity: activeSection === it.id ? 1 : 0.5 }}>{it.icon}</span>
+            <span>{it.label}</span>
+          </div>
         </div>
       ))}
 
@@ -190,16 +196,23 @@ function Sidebar({ session, config, onToggleBot, toggling }: {
 }
 
 // ── TopBar ───────────────────────────────────────────────────────
-function TopBar({ session, lastRefresh, onRefresh }: {
+const SECTION_LABELS: Record<string, string> = {
+  dash: "Overview", pos: "Posiciones", sig: "Señales & Watchlist",
+  risk: "Risk Management", log: "Signal Log", set: "Configuración",
+};
+
+function TopBar({ session, lastRefresh, onRefresh, activeSection, nextRefresh }: {
   session: SessionInfo;
   lastRefresh: string;
   onRefresh: () => void;
+  activeSection: string;
+  nextRefresh: number;
 }) {
   return (
     <div className="row between" style={{ padding: "16px 26px", borderBottom: "1px solid var(--hairline)", flexShrink: 0 }}>
       <div className="col" style={{ gap: 3 }}>
         <div className="row" style={{ gap: 10, alignItems: "center" }}>
-          <h1 className="t-display" style={{ fontSize: 20 }}>Overview</h1>
+          <h1 className="t-display" style={{ fontSize: 20 }}>{SECTION_LABELS[activeSection] ?? "Overview"}</h1>
           {session.active && (
             <span className="nx-pill nx-pill-bull">
               <span className="dot-live" style={{ width: 5, height: 5 }}/>
@@ -207,7 +220,11 @@ function TopBar({ session, lastRefresh, onRefresh }: {
             </span>
           )}
         </div>
-        <span className="t-eyebrow">UTC {session.utcHour}:xx · auto-refresh 30s{lastRefresh && ` · actualizado ${lastRefresh}`}</span>
+        <span className="t-eyebrow">
+          UTC {session.utcHour}:xx · auto-refresh 10s
+          {lastRefresh && ` · actualizado ${lastRefresh}`}
+          {nextRefresh > 0 && ` · próximo en ${nextRefresh}s`}
+        </span>
       </div>
       <button className="nx-btn" onClick={onRefresh} style={{ padding: "6px 12px" }}>↻ Refresh</button>
     </div>
@@ -773,14 +790,18 @@ function CerebroPanel({ symbols, latestSignals }: { symbols: string[]; latestSig
 }
 
 // ── Main Dashboard ────────────────────────────────────────────────
+const REFRESH_INTERVAL = 10; // seconds
+
 export default function Dashboard() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState("");
+  const [nextRefresh, setNextRefresh] = useState(REFRESH_INTERVAL);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState("");
   const [toggling, setToggling] = useState(false);
+  const [activeSection, setActiveSection] = useState("dash");
 
   const fetchData = useCallback(async () => {
     try {
@@ -790,6 +811,7 @@ export default function Dashboard() {
       setData(json);
       setError(null);
       setLastRefresh(new Date().toLocaleTimeString());
+      setNextRefresh(REFRESH_INTERVAL);
     } catch (e) {
       setError(String(e));
     } finally {
@@ -799,9 +821,15 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchData();
-    const id = setInterval(fetchData, 30000);
-    return () => clearInterval(id);
+    const refreshId = setInterval(fetchData, REFRESH_INTERVAL * 1000);
+    return () => clearInterval(refreshId);
   }, [fetchData]);
+
+  // Live countdown to next refresh
+  useEffect(() => {
+    const id = setInterval(() => setNextRefresh(n => (n <= 1 ? REFRESH_INTERVAL : n - 1)), 1000);
+    return () => clearInterval(id);
+  }, []);
 
   const toggleBot = async () => {
     if (!data) return;
@@ -866,39 +894,75 @@ export default function Dashboard() {
   const { session, account, positions, prices, config, recentTrades, latestSignals, signalLogs } = data;
   const symbols = config.symbols;
 
-  return (
-    <div className="nx-bg" style={{ display: "flex", minHeight: "100vh" }}>
-      <Sidebar session={session} config={config} onToggleBot={toggleBot} toggling={toggling}/>
-
-      <div className="col grow" style={{ minWidth: 0 }}>
-        <TopBar session={session} lastRefresh={lastRefresh} onRefresh={fetchData}/>
-
-        <div className="col" style={{ padding: "22px 26px", gap: 18 }}>
-
-          {/* KPI Ribbon */}
-          <AccountRibbon account={account} recentTrades={recentTrades}/>
-
-          {/* Cerebro + Positions */}
-          <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr", gap: 18 }}>
-            <PositionsPanel positions={positions}/>
+  // Section-based content
+  function SectionContent() {
+    switch (activeSection) {
+      case "pos":
+        return <PositionsPanel positions={positions}/>;
+      case "sig":
+        return (
+          <div className="col" style={{ gap: 18 }}>
+            <SymbolsTable symbols={symbols} latestSignals={latestSignals} prices={prices} positions={positions}/>
+            <SignalLogPanel signalLogs={signalLogs}/>
+          </div>
+        );
+      case "risk":
+        return (
+          <div style={{ display: "grid", gridTemplateColumns: "380px 1fr", gap: 18, alignItems: "start" }}>
+            <RiskConfigPanel config={config} onSave={saveConfig} saving={saving} saveMsg={saveMsg}/>
             <CerebroPanel symbols={symbols} latestSignals={latestSignals}/>
           </div>
-
-          {/* Watchlist */}
-          <SymbolsTable symbols={symbols} latestSignals={latestSignals} prices={prices} positions={positions}/>
-
-          {/* Config + Trades + Log */}
-          <div style={{ display: "grid", gridTemplateColumns: "300px 1fr", gap: 18 }}>
+        );
+      case "log":
+        return <SignalLogPanel signalLogs={signalLogs}/>;
+      case "set":
+        return (
+          <div style={{ maxWidth: 480 }}>
             <RiskConfigPanel config={config} onSave={saveConfig} saving={saving} saveMsg={saveMsg}/>
-            <div className="col" style={{ gap: 18 }}>
-              <RecentTradesPanel trades={recentTrades}/>
-              <SignalLogPanel signalLogs={signalLogs}/>
-            </div>
           </div>
+        );
+      default: // "dash"
+        return (
+          <>
+            <AccountRibbon account={account} recentTrades={recentTrades}/>
+            <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr", gap: 18 }}>
+              <PositionsPanel positions={positions}/>
+              <CerebroPanel symbols={symbols} latestSignals={latestSignals}/>
+            </div>
+            <SymbolsTable symbols={symbols} latestSignals={latestSignals} prices={prices} positions={positions}/>
+            <div style={{ display: "grid", gridTemplateColumns: "300px 1fr", gap: 18 }}>
+              <RiskConfigPanel config={config} onSave={saveConfig} saving={saving} saveMsg={saveMsg}/>
+              <div className="col" style={{ gap: 18 }}>
+                <RecentTradesPanel trades={recentTrades}/>
+                <SignalLogPanel signalLogs={signalLogs}/>
+              </div>
+            </div>
+          </>
+        );
+    }
+  }
+
+  return (
+    <div className="nx-bg" style={{ display: "flex", minHeight: "100vh" }}>
+      <Sidebar
+        session={session} config={config}
+        onToggleBot={toggleBot} toggling={toggling}
+        activeSection={activeSection} onNav={setActiveSection}
+      />
+
+      <div className="col grow" style={{ minWidth: 0 }}>
+        <TopBar
+          session={session} lastRefresh={lastRefresh}
+          onRefresh={fetchData} activeSection={activeSection}
+          nextRefresh={nextRefresh}
+        />
+
+        <div className="col" style={{ padding: "22px 26px", gap: 18 }}>
+          <SectionContent/>
         </div>
 
         <div style={{ textAlign: "center", color: "var(--t-500)", fontSize: 10, padding: "12px 0 20px", fontFamily: "var(--font-mono)" }}>
-          NEXUS IA v2 · Cerebro v21 · auto-refresh 30s · {data.timestamp}
+          NEXUS IA v2 · Cerebro v21 · auto-refresh {REFRESH_INTERVAL}s · {data.timestamp}
         </div>
       </div>
     </div>
