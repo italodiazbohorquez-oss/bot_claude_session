@@ -19,6 +19,7 @@ interface DashboardData {
   session: SessionInfo;
   account: AccountInfo | null;
   positions: Position[];
+  prices: Record<string, number>;
   config: { minScore: number; capital: number; symbols: string[]; leverage: number; botEnabled: boolean };
   recentTrades: Trade[];
   latestSignals: Record<string, SignalLog>;
@@ -93,7 +94,7 @@ export default function Dashboard() {
 
   const fetchData = useCallback(async () => {
     try {
-      const res = await fetch("/api/dashboard");
+      const res = await fetch("/api/dashboard", { cache: "no-store" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json: DashboardData = await res.json();
       setData(json);
@@ -171,7 +172,7 @@ export default function Dashboard() {
     );
   }
 
-  const { session, account, positions, config, recentTrades, latestSignals, signalLogs } = data;
+  const { session, account, positions, prices, config, recentTrades, latestSignals, signalLogs } = data;
   const symbols = config.symbols;
 
   return (
@@ -252,6 +253,7 @@ export default function Dashboard() {
           <thead>
             <tr>
               <th>Símbolo</th>
+              <th>Precio</th>
               <th>5M</th><th>15M</th><th>1H</th><th>4H</th>
               <th>Setup</th>
               <th>Score L</th><th>Score S</th>
@@ -267,6 +269,7 @@ export default function Dashboard() {
               const hasPos = positions.some(p => p.symbol === sym);
               const mtf = sig ? parseMtfSetup(sig.mtf_setup) : null;
               const act = sig ? parseAction(sig.action_taken) : null;
+              const livePrice = prices?.[sym];
 
               const statusType = !act ? "gray"
                 : act.status.includes("OPENED") && act.status.includes("LONG") ? "green"
@@ -279,6 +282,9 @@ export default function Dashboard() {
                   <td>
                     <span style={{ fontWeight: 800, fontSize: 14 }}>{sym}</span>
                     {hasPos && <span style={{ marginLeft: 6 }}><Badge label="OPEN" type="blue" /></span>}
+                  </td>
+                  <td style={{ fontWeight: 700, color: "#f3f4f6", fontFamily: "monospace" }}>
+                    {livePrice != null ? `$${livePrice.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}
                   </td>
                   <td><DirBadge dir={mtf?.tf5m} /></td>
                   <td><DirBadge dir={mtf?.tf15m} /></td>

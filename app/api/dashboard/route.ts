@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRecentTrades, getSignalLogs, getBotConfig } from "@/lib/supabase";
-import { getAccount, getPosition } from "@/lib/bitunix";
+import { getAccount, getPosition, getTicker } from "@/lib/bitunix";
 import { getCurrentSession } from "@/lib/sessions";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export async function GET(_req: NextRequest) {
   const session = getCurrentSession();
@@ -29,9 +31,10 @@ export async function GET(_req: NextRequest) {
     ? (botEnabledDb.value !== "false")
     : true;
 
-  // Fetch account & positions
+  // Fetch account, positions and live prices in parallel
   let account = null;
   const positions: Record<string, unknown>[] = [];
+  const prices: Record<string, number> = {};
 
   try {
     account = await getAccount();
@@ -39,14 +42,20 @@ export async function GET(_req: NextRequest) {
     console.error("[Dashboard] account error:", e);
   }
 
-  for (const sym of symbols) {
+  await Promise.all(symbols.map(async (sym) => {
     try {
       const pos = await getPosition(sym);
       if (pos) positions.push({ ...pos });
     } catch (e) {
       console.error(`[Dashboard] position error ${sym}:`, e);
     }
-  }
+    try {
+      const ticker = await getTicker(sym);
+      prices[sym] = ticker.lastPrice;
+    } catch {
+      // price not critical
+    }
+  }));
 
   // Latest signals per symbol
   const latestSignals: Record<string, unknown> = {};
@@ -56,15 +65,19 @@ export async function GET(_req: NextRequest) {
     if (symLogs.length > 0) latestSignals[sym] = symLogs[0];
   }
 
-  return NextResponse.json({
-    ok: true,
-    session,
-    account,
-    positions,
-    config: { minScore, capital, symbols, leverage: parseInt(process.env.LEVERAGE ?? "5"), botEnabled },
-    recentTrades: recentTrades.status === "fulfilled" ? recentTrades.value : [],
-    latestSignals,
-    signalLogs: logs.slice(0, 10),
-    timestamp: new Date().toISOString(),
-  });
+  return NextResponse.json(
+    {
+      ok: true,
+      session,
+      account,
+      positions,
+      prices,
+      config: { minScore, capital, symbols, leverage: parseInt(process.env.LEVERAGE ?? "5"), botEnabled },
+      recentTrades: recentTrades.status === "fulfilled" ? recentTrades.value : [],
+      latestSignals,
+      signalLogs: logs.slice(0, 10),
+      timestamp: new Date().toISOString(),
+    },
+    { headers: { "Cache-Control": "no-store, max-age=0" } }
+  );
 }

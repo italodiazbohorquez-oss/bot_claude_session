@@ -74,6 +74,7 @@ async function request<T>(
         headers,
         body: method === "POST" ? JSON.stringify(body) : undefined,
         signal: AbortSignal.timeout(8000),
+        cache: "no-store",
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
       const data = await res.json();
