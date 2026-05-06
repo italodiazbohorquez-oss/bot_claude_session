@@ -84,14 +84,31 @@ export async function runBotForSymbol(symbol: string): Promise<BotRunResult> {
 
   // 3. Gestión de posición abierta
   let openPosition: Position | null = null;
+  let exchangeFetchError = false;
+
   try {
     openPosition = await getPosition(symbol);
   } catch (e) {
     console.error(`[Bot] getPosition error: ${e}`);
+    exchangeFetchError = true;
   }
 
-  // Fallback: if exchange API fails, reconstruct from Supabase record
-  if (!openPosition) {
+  if (openPosition === null && !exchangeFetchError) {
+    // Exchange confirmed no open position — auto-close any stale Supabase "OPEN" records
+    // (happens when TP/SL hit on exchange without the bot catching the close event)
+    const stale = await getOpenTrade(symbol);
+    if (stale?.id) {
+      const curClose = candles15m[candles15m.length - 1].close;
+      const priceDiff = stale.side === "LONG"
+        ? curClose - stale.entry_price
+        : stale.entry_price - curClose;
+      const estPnl = priceDiff * stale.size;
+      await updateTrade(stale.id, { status: "CLOSED", closed_at: ts, pnl: estPnl });
+      console.log(`[Bot] Auto-closed stale Supabase trade for ${symbol} — TP/SL hit on exchange`);
+      notify(buildClosedMsg({ symbol, side: stale.side, pnl: estPnl, reason: "TP/SL hit (auto-sync)" })).catch(() => {});
+    }
+  } else if (openPosition === null && exchangeFetchError) {
+    // Exchange API error — use Supabase fallback to avoid opening duplicate positions
     const dbTrade = await getOpenTrade(symbol);
     if (dbTrade) {
       const curClose = candles15m[candles15m.length - 1].close;
