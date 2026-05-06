@@ -18,8 +18,13 @@ export async function GET() {
   const waKey = process.env.WHATSAPP_API_KEY;
   if (waPhone && waKey) {
     try {
-      await sendWhatsApp(message);
-      results.whatsapp = "enviado ✓";
+      const text = encodeURIComponent(`NEXUS IA test - ${new Date().toUTCString()}`);
+      const res = await fetch(
+        `https://api.callmebot.com/whatsapp.php?phone=${waPhone}&text=${text}&apikey=${waKey}`,
+        { signal: AbortSignal.timeout(8000) }
+      );
+      const body = await res.text();
+      results.whatsapp = `HTTP ${res.status} · ${body.slice(0, 200)}`;
     } catch (e) {
       results.whatsapp = `error: ${e}`;
     }
