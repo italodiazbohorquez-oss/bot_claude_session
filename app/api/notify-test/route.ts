@@ -5,12 +5,17 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const message = `🤖 <b>NEXUS IA · TEST DE NOTIFICACIÓN</b>
-━━━━━━━━━━━━━━━━━━
+  const limaTime = new Date().toLocaleString("es-PE", {
+    timeZone: process.env.TIMEZONE ?? "America/Lima",
+    day: "2-digit", month: "2-digit", year: "numeric",
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+    hour12: false,
+  });
+  const message = `🤖 NEXUS IA · TEST DE NOTIFICACIÓN
 ✅ Conexión establecida correctamente
 📊 Bot activo · Cerebro v21
-⚡ Las alertas de señales están configuradas
-🕐 ${new Date().toUTCString()}`;
+⚡ Alertas configuradas y activas
+🕑 ${limaTime} (Lima)`;
 
   const results: Record<string, string> = {};
 

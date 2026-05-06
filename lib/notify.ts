@@ -18,6 +18,15 @@ function stripHtml(s: string): string {
   return s.replace(/<[^>]*>/g, "").replace(/━/g, "-");
 }
 
+function localTime(): string {
+  return new Date().toLocaleString("es-PE", {
+    timeZone: process.env.TIMEZONE ?? "America/Lima",
+    day: "2-digit", month: "2-digit", year: "numeric",
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+    hour12: false,
+  });
+}
+
 // ── Message builders ──────────────────────────────────────────────────────────
 
 export interface OpenedCtx {
@@ -40,7 +49,8 @@ export function buildOpenedMsg(ctx: OpenedCtx): string {
 🎯 TP:    <code>$${fmtPrice(tp)}</code>  (+${diffPct(e, tp)}%)
 📦 Size:  <code>${contracts} · $${positionUsd.toFixed(0)}</code>  Riesgo: $${riskUsd.toFixed(0)}
 ⚡ Sqz: ${sqzLabel(highSqz, midSqz, sqzOff, sqzOn)}
-💪 ADX: ${adxStrength}  |  🕐 ${session}`;
+💪 ADX: ${adxStrength}  |  🕐 ${session}
+🕑 ${localTime()} (Lima)`;
 }
 
 export interface ClosedCtx {
@@ -58,7 +68,8 @@ export function buildClosedMsg(ctx: ClosedCtx): string {
 ━━━━━━━━━━━━━━━━━━
 📊 <b>${symbol}</b>
 📋 Razón: ${reason}
-💰 PnL: <b>${pnlStr}</b>`;
+💰 PnL: <b>${pnlStr}</b>
+🕑 ${localTime()} (Lima)`;
 }
 
 export interface SetupCtx {
@@ -86,7 +97,8 @@ export function buildSetupMsg(ctx: SetupCtx): string {
 📈 Score: <b>${score}/9</b>  (faltan ${missing} para gatillo ${minScore})
 ⚡ Sqz: ${sqzLabel(highSqz, midSqz, sqzOff, sqzOn)}
 💪 ADX: ${adxValue.toFixed(1)} ${adxStrength}
-👀 Monitorear entrada en próximas velas 15M`;
+👀 Monitorear entrada en próximas velas 15M
+🕑 ${localTime()} (Lima)`;
 }
 
 export interface CompressionCtx {
@@ -107,7 +119,8 @@ export function buildCompressionMsg(ctx: CompressionCtx): string {
 📈 LONG: <b>${scoreLong}/9</b>  |  SHORT: <b>${scoreShort}/9</b>
 🎯 Mejor score: <b>${bestScore}/9 ${dir}</b>  (gatillo: ${minScore})
 💪 ADX: ${adxStrength}
-⏳ Precio expandiendo — esperando confirmación...`;
+⏳ Precio expandiendo — esperando confirmación...
+🕑 ${localTime()} (Lima)`;
 }
 
 // ── Transport ─────────────────────────────────────────────────────────────────
