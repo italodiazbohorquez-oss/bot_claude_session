@@ -112,7 +112,7 @@ export function buildCompressionMsg(ctx: CompressionCtx): string {
 
 // ── Transport ─────────────────────────────────────────────────────────────────
 
-async function sendTelegram(message: string): Promise<void> {
+export async function sendTelegram(message: string): Promise<void> {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
   if (!token || !chatId) return;
@@ -131,7 +131,7 @@ async function sendTelegram(message: string): Promise<void> {
 }
 
 // WhatsApp via CallMeBot (free, needs one-time registration at callmebot.com/blog/free-whatsapp-messages-callmebot)
-async function sendWhatsApp(message: string): Promise<void> {
+export async function sendWhatsApp(message: string): Promise<void> {
   const phone = process.env.WHATSAPP_PHONE;   // international format, no +: e.g. 573001234567
   const apiKey = process.env.WHATSAPP_API_KEY; // from CallMeBot
   if (!phone || !apiKey) return;
