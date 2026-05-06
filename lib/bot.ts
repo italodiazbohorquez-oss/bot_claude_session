@@ -5,7 +5,8 @@ import { calcRsiSignal, rsiLongSignal, rsiShortSignal } from "./rsi";
 import { calcCerebro } from "./cerebro";
 import { calcRrDynamic, calcSlTp, calcPositionSize } from "./risk";
 import { getCurrentSession } from "./sessions";
-import { saveTrade, saveSignalLog, getOpenTrade, updateTrade, getBotConfig } from "./supabase";
+import { saveTrade, saveSignalLog, getOpenTrade, updateTrade, getBotConfig, setBotConfig } from "./supabase";
+import { notify, buildOpenedMsg, buildClosedMsg, buildCompressionMsg } from "./notify";
 import type { Candle } from "./math";
 
 export interface BotRunResult {
@@ -139,6 +140,12 @@ export async function runBotForSymbol(symbol: string): Promise<BotRunResult> {
           unrealizedPnl: openPosition.unrealizedPnl,
           h1Direction: h1Bull ? "BULL" : "BEAR",
         };
+        notify(buildClosedMsg({
+          symbol,
+          side: openPosition.side,
+          pnl: openPosition.unrealizedPnl,
+          reason: `1H Reversal → ${h1Bull ? "BULL" : "BEAR"}`,
+        })).catch(() => {});
       } catch (e) {
         result.action = "CLOSE_ERROR";
         result.details = { error: String(e) };
@@ -275,6 +282,30 @@ export async function runBotForSymbol(symbol: string): Promise<BotRunResult> {
 
     signalLog.action_taken = `WAIT:${blockReason}`;
     await saveSignalLog(signalLog);
+
+    // Alerta de compresión: sqzOff activo + score cercano al gatillo → posible expansión inminente
+    // Throttle: una vez cada 2 horas por símbolo para no spamear
+    const bestScore = Math.max(effectiveScoreLong, effectiveScoreShort);
+    if (sqz15m.sqzOff && bestScore >= minScore - 1) {
+      const throttleKey = `notify_sqz_${symbol}`;
+      const lastNotifyTs = await getBotConfig(throttleKey);
+      const twoHoursAgo = Date.now() - 2 * 60 * 60 * 1000;
+      if (!lastNotifyTs || parseInt(lastNotifyTs) < twoHoursAgo) {
+        await setBotConfig(throttleKey, String(Date.now()));
+        notify(buildCompressionMsg({
+          symbol,
+          scoreLong: effectiveScoreLong,
+          scoreShort: effectiveScoreShort,
+          highSqz: sqz15m.highSqz,
+          midSqz: sqz15m.midSqz,
+          sqzOff: sqz15m.sqzOff,
+          sqzOn: sqz15m.sqzOn,
+          adxStrength,
+          minScore,
+        })).catch(() => {});
+      }
+    }
+
     result.action = "WAIT";
     result.details = {
       scoreLong, scoreShort, effectiveScoreLong, effectiveScoreShort,
@@ -368,6 +399,22 @@ export async function runBotForSymbol(symbol: string): Promise<BotRunResult> {
 
   signalLog.action_taken = `OPENED_${side}`;
   await saveSignalLog(signalLog);
+
+  notify(buildOpenedMsg({
+    symbol, side,
+    entryPrice: curCandle.close,
+    sl, tp,
+    contracts: posResult.contracts,
+    positionUsd: posResult.positionUsd,
+    riskUsd: posResult.riskUsd,
+    score: entryScore,
+    session: session.session,
+    highSqz: sqz15m.highSqz,
+    midSqz: sqz15m.midSqz,
+    sqzOff: sqz15m.sqzOff,
+    sqzOn: sqz15m.sqzOn,
+    adxStrength,
+  })).catch(() => {});
 
   result.action = `OPENED_${side}`;
   result.details = {
