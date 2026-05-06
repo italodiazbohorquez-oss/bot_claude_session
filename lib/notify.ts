@@ -88,6 +88,8 @@ export function buildSetupMsg(ctx: SetupCtx): string {
 💪 ADX: ${adxValue.toFixed(1)} ${adxStrength}
 👀 Monitorear entrada en próximas velas 15M`;
 }
+
+export interface CompressionCtx {
   symbol: string;
   scoreLong: number; scoreShort: number;
   highSqz: boolean; midSqz: boolean; sqzOff: boolean; sqzOn: boolean;
