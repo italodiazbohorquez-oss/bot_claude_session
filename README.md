@@ -183,7 +183,7 @@ All technical indicators are implemented in pure TypeScript (`lib/math.ts`):
 - VWAP (daily, weekly anchored)
 
 No external indicator libraries (`talib`, `technicalindicators`, etc.).
-
+  
 ---
 
 ## ⚠ Disclaimer
