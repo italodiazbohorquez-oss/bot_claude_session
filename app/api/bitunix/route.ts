@@ -3,6 +3,7 @@ import { getCandles, getTicker, getAccount, getPosition } from "@/lib/bitunix";
 import type { TimeFrame } from "@/lib/bitunix";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);

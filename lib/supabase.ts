@@ -42,12 +42,14 @@ export interface BotConfig {
   value: string;
 }
 
-const supabaseUrl = process.env.SUPABASE_URL ?? "";
-const supabaseKey = process.env.SUPABASE_ANON_KEY ?? "";
+function getSupabaseClient() {
+  const url = process.env.SUPABASE_URL ?? "";
+  const key = process.env.SUPABASE_ANON_KEY ?? "";
+  if (!url.startsWith("http") || !key) return null;
+  try { return createClient(url, key); } catch { return null; }
+}
 
-export const supabase = supabaseUrl && supabaseKey
-  ? createClient(supabaseUrl, supabaseKey)
-  : null;
+export const supabase = getSupabaseClient();
 
 export async function saveTrade(trade: Trade): Promise<Trade | null> {
   if (!supabase) return null;

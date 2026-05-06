@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getBotConfig, setBotConfig } from "@/lib/supabase";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 const ALLOWED_KEYS = ["capital", "min_score", "risk_per_trade", "symbols", "bot_enabled"];
 

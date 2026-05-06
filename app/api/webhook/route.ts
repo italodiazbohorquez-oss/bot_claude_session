@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { saveSignalLog } from "@/lib/supabase";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 interface TradingViewAlert {
   symbol?: string;
