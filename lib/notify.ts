@@ -61,7 +61,33 @@ export function buildClosedMsg(ctx: ClosedCtx): string {
 💰 PnL: <b>${pnlStr}</b>`;
 }
 
-export interface CompressionCtx {
+export interface SetupCtx {
+  symbol: string;
+  side: "LONG" | "SHORT";
+  scoreLong: number; scoreShort: number;
+  tf15m: string; tf1h: string; tf4h: string;
+  highSqz: boolean; midSqz: boolean; sqzOff: boolean; sqzOn: boolean;
+  adxStrength: string; adxValue: number;
+  minScore: number;
+}
+
+export function buildSetupMsg(ctx: SetupCtx): string {
+  const { symbol, side, scoreLong, scoreShort, tf15m, tf1h, tf4h, highSqz, midSqz, sqzOff, sqzOn, adxStrength, adxValue, minScore } = ctx;
+  const score = side === "LONG" ? scoreLong : scoreShort;
+  const missing = minScore - score;
+  const arrow15m = tf15m === "BULL" ? "▲" : tf15m === "BEAR" ? "▼" : "—";
+  const arrow1h  = tf1h  === "BULL" ? "▲" : tf1h  === "BEAR" ? "▼" : "—";
+  const arrow4h  = tf4h  === "BULL" ? "▲" : tf4h  === "BEAR" ? "▼" : "—";
+  const emoji = side === "LONG" ? "📈" : "📉";
+  return `${emoji} <b>NEXUS IA · SETUP FORMANDO ${side}</b>
+━━━━━━━━━━━━━━━━━━
+📊 <b>${symbol}</b>
+🕐 15M ${arrow15m}  ·  1H ${arrow1h}  ·  4H ${arrow4h}  <i>(confluencia MTF)</i>
+📈 Score: <b>${score}/9</b>  (faltan ${missing} para gatillo ${minScore})
+⚡ Sqz: ${sqzLabel(highSqz, midSqz, sqzOff, sqzOn)}
+💪 ADX: ${adxValue.toFixed(1)} ${adxStrength}
+👀 Monitorear entrada en próximas velas 15M`;
+}
   symbol: string;
   scoreLong: number; scoreShort: number;
   highSqz: boolean; midSqz: boolean; sqzOff: boolean; sqzOn: boolean;

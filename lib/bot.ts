@@ -6,7 +6,7 @@ import { calcCerebro } from "./cerebro";
 import { calcRrDynamic, calcSlTp, calcPositionSize } from "./risk";
 import { getCurrentSession } from "./sessions";
 import { saveTrade, saveSignalLog, getOpenTrade, updateTrade, getBotConfig, setBotConfig } from "./supabase";
-import { notify, buildOpenedMsg, buildClosedMsg, buildCompressionMsg } from "./notify";
+import { notify, buildOpenedMsg, buildClosedMsg, buildCompressionMsg, buildSetupMsg } from "./notify";
 import type { Candle } from "./math";
 
 export interface BotRunResult {
@@ -283,9 +283,32 @@ export async function runBotForSymbol(symbol: string): Promise<BotRunResult> {
     signalLog.action_taken = `WAIT:${blockReason}`;
     await saveSignalLog(signalLog);
 
-    // Alerta de compresión: sqzOff activo + score cercano al gatillo → posible expansión inminente
-    // Throttle: una vez cada 2 horas por símbolo para no spamear
     const bestScore = Math.max(effectiveScoreLong, effectiveScoreShort);
+    const setupSide: "LONG" | "SHORT" = effectiveScoreLong >= effectiveScoreShort ? "LONG" : "SHORT";
+    const h1h4Aligned = (sqz1h.sqzVal > 0 && sqz4h.sqzVal > 0) || (sqz1h.sqzVal < 0 && sqz4h.sqzVal < 0);
+
+    // Alerta SETUP FORMANDO: 1H+4H alineados, score ≥ 3 pero sin llegar al gatillo
+    // Throttle: 1 vez cada 90 minutos por símbolo
+    if (h1h4Aligned && bestScore >= 3 && bestScore < minScore) {
+      const setupKey = `notify_setup_${symbol}`;
+      const lastTs = await getBotConfig(setupKey);
+      const ninetyMinAgo = Date.now() - 90 * 60 * 1000;
+      if (!lastTs || parseInt(lastTs) < ninetyMinAgo) {
+        await setBotConfig(setupKey, String(Date.now()));
+        notify(buildSetupMsg({
+          symbol, side: setupSide,
+          scoreLong: effectiveScoreLong, scoreShort: effectiveScoreShort,
+          tf15m: mtf.tf15m, tf1h: mtf.tf1h, tf4h: mtf.tf4h,
+          highSqz: sqz15m.highSqz, midSqz: sqz15m.midSqz,
+          sqzOff: sqz15m.sqzOff, sqzOn: sqz15m.sqzOn,
+          adxStrength, adxValue: sqz15m.adxValue,
+          minScore,
+        })).catch(() => {});
+      }
+    }
+
+    // Alerta COMPRESIÓN: sqzOff activo + score cercano al gatillo
+    // Throttle: 1 vez cada 2 horas por símbolo
     if (sqz15m.sqzOff && bestScore >= minScore - 1) {
       const throttleKey = `notify_sqz_${symbol}`;
       const lastNotifyTs = await getBotConfig(throttleKey);
