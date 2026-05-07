@@ -426,8 +426,9 @@ export async function runBotForSymbol(symbol: string): Promise<BotRunResult> {
     signalLog.action_taken = "SKIPPED_SIZE_ZERO";
     await saveSignalLog(signalLog);
     result.action = "SKIPPED_SIZE_ZERO";
-    return result;
-  }
+    result.details = { side, entryScore, setupType, close: curCandle.close, capital, riskPerTrade };
+    notify(`⚠️ <b>NEXUS IA · TAMAÑO CERO</b>\n━━━━━━━━━━━━━━━━━━\n📊 <b>${symbol}</b> ${side} · Score ${entryScore}/9  [${setupType}]\n🕐 5M ${mtf.tf5m === "BULL" ? "▲" : mtf.tf5m === "BEAR" ? "▼" : "—"} · 15M ${mtf.tf15m === "BULL" ? "▲" : mtf.tf15m === "BEAR" ? "▼" : "—"} · 1H ${mtf.tf1h === "BULL" ? "▲" : mtf.tf1h === "BEAR" ? "▼" : "—"} · 4H ${mtf.tf4h === "BULL" ? "▲" : mtf.tf4h === "BEAR" ? "▼" : "—"}\n💵 Entry aprox: $${curCandle.close.toFixed(curCandle.close >= 1000 ? 0 : 4)}\n💰 Capital $${capital} insuficiente para min. stepSize\n⚡ Ajustar capital o stepSize en config`).catch(() => {});
+  return result;
 
   // 7. Ejecutar orden de mercado
   let orderId = "";
@@ -478,7 +479,7 @@ export async function runBotForSymbol(symbol: string): Promise<BotRunResult> {
     console.error(`[Bot] SL/TP placement failed for ${symbol}: ${e}`);
     notify(`⚠️ <b>NEXUS IA · SIN STOPS</b>\n${symbol} ${side} abierto\nSL/TP fallaron: ${String(e).slice(0, 100)}\n⚡ Coloca SL/TP manualmente`).catch(() => {});
   }
-  notify(buildOpenedMsg({
+    notify(buildOpenedMsg({
     symbol, side,
     entryPrice: curCandle.close,
     sl, tp,
@@ -492,6 +493,11 @@ export async function runBotForSymbol(symbol: string): Promise<BotRunResult> {
     sqzOff: sqz15m.sqzOff,
     sqzOn: sqz15m.sqzOn,
     adxStrength,
+    setupType,
+    tf5m: mtf.tf5m,
+    tf15m: mtf.tf15m,
+    tf1h: mtf.tf1h,
+    tf4h: mtf.tf4h,
   })).catch(() => {});
 
   result.action = `OPENED_${side}`;
