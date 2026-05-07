@@ -134,8 +134,8 @@ export async function runBotForSymbol(symbol: string): Promise<BotRunResult> {
     const h1Reversed = (posLong && !h1Bull) || (!posLong && h1Bull);
     const h4Reversed = (posLong && !h4Bull) || (!posLong && h4Bull);
 
-    // Cierra solo cuando 4H confirma reversión — es el timeframe de tendencia mayor
-    if (h4Reversed) {
+        // Cierra solo cuando 1H Y 4H ambos confirman reversión
+    if (h1Reversed && h4Reversed) {
       try {
         await placeOrder({
           symbol,
@@ -153,7 +153,7 @@ export async function runBotForSymbol(symbol: string): Promise<BotRunResult> {
             pnl: openPosition.unrealizedPnl,
           });
         }
-        result.action = "CLOSED_4H_REVERSAL";
+        result.action = "CLOSED_1H4H_REVERSAL";
         result.details = {
           side: openPosition.side,
           unrealizedPnl: openPosition.unrealizedPnl,
@@ -164,7 +164,7 @@ export async function runBotForSymbol(symbol: string): Promise<BotRunResult> {
           symbol,
           side: openPosition.side,
           pnl: openPosition.unrealizedPnl,
-          reason: `4H Reversal → ${h4Bull ? "BULL" : "BEAR"}`,
+          reason: `1H+4H Reversal → ${h4Bull ? "BULL" : "BEAR"}`,
         })).catch(() => {});
       } catch (e) {
         result.action = "CLOSE_ERROR";
@@ -173,26 +173,33 @@ export async function runBotForSymbol(symbol: string): Promise<BotRunResult> {
       return result;
     }
 
-    // 1H retrocedió pero 4H sigue alineado → mantener posición (retroceso temporal)
-    if (h1Reversed) {
+    // Al menos un TF sigue alineado — mantener posición
+    const holdMsg = h1Reversed
+      ? `1H revertido · 4H sigue ${h4Bull ? "BULL ▲" : "BEAR ▼"}`
+      : h4Reversed
+        ? `4H revertido · 1H sigue ${h1Bull ? "BULL ▲" : "BEAR ▼"}`
+        : null;
+
+    if (holdMsg) {
       const holdKey = `notify_hold_${symbol}`;
       const lastHoldTs = await getBotConfig(holdKey);
       const twoHoursAgo = Date.now() - 2 * 60 * 60 * 1000;
       if (!lastHoldTs || parseInt(lastHoldTs) < twoHoursAgo) {
         await setBotConfig(holdKey, String(Date.now()));
         const pnlStr = `${openPosition.unrealizedPnl >= 0 ? "+" : ""}${openPosition.unrealizedPnl.toFixed(2)}`;
-        notify(`⏸️ <b>NEXUS IA · HOLDING ${symbol}</b>\n━━━━━━━━━━━━━━━━━━\n📊 <b>${symbol}</b> ${openPosition.side}\n🔄 1H retrocedió · 4H sigue ${h4Bull ? "BULL ▲" : "BEAR ▼"}\n💰 PnL actual: ${pnlStr} USDT\n👀 Manteniendo por confluencia 4H`).catch(() => {});
+        notify(`⏸️ <b>NEXUS IA · HOLDING ${symbol}</b>\n━━━━━━━━━━━━━━━━━━\n📊 <b>${symbol}</b> ${openPosition.side}\n🔄 ${holdMsg}\n💰 PnL actual: ${pnlStr} USDT\n👀 Esperando que ambos TF reviertan`).catch(() => {});
       }
-      result.action = "HOLDING_1H_RETRACE";
-      result.details = {
-        side: openPosition.side,
-        size: openPosition.size,
-        entryPrice: openPosition.entryPrice,
-        unrealizedPnl: openPosition.unrealizedPnl,
-        h1Direction: h1Bull ? "BULL" : "BEAR",
-        h4Direction: h4Bull ? "BULL" : "BEAR",
-        reason: "1H retracement — 4H still aligned",
-      };
+    }
+
+    result.action = h1Reversed || h4Reversed ? "HOLDING_TF_RETRACE" : "POSITION_ACTIVE";
+    result.details = {
+      side: openPosition.side,
+      size: openPosition.size,
+      entryPrice: openPosition.entryPrice,
+      unrealizedPnl: openPosition.unrealizedPnl,
+      h1Direction: h1Bull ? "BULL" : "BEAR",
+      h4Direction: h4Bull ? "BULL" : "BEAR",
+    };
       return result;
     }
 
