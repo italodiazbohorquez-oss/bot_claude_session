@@ -134,7 +134,8 @@ interface RawTicker {
 }
 
 export async function getTicker(symbol: string): Promise<{ lastPrice: number; markPrice: number }> {
-  const data = await request<RawTicker>("GET", "/api/v1/futures/ticker", { symbol }, {}, false);
+  const raw = await request<RawTicker | RawTicker[]>("GET", "/api/v1/futures/market/ticker", { symbol }, {}, false);
+  const data = Array.isArray(raw) ? raw[0] : raw;
   return {
     lastPrice: parseFloat(data.lastPrice),
     markPrice: parseFloat(data.markPrice),
