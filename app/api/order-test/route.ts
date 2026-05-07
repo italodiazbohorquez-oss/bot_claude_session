@@ -34,37 +34,24 @@ export async function GET(req: Request) {
   const symbol = (searchParams.get("symbol") ?? "ETHUSDT").toUpperCase();
   const mode = searchParams.get("mode") ?? "dry";
 
-  const triggerPrice = "1000.00";
-  const base = { symbol, side: "SELL", positionSide: "LONG", qty: "0.001" };
+  const slPrice = "1000.00";
+  const tpPrice = "5000.00";
+  const base = { symbol, positionSide: "LONG" };
 
-  // Group A: /api/v1/futures/order (current — all failing with code 2)
-  const groupA = [
-    { endpoint: "/api/v1/futures/order", body: { ...base, type: "STOP_MARKET", triggerPrice, reduceOnly: true } },
+  const variants = [
+    { endpoint: "/api/v1/futures/tpsl/place_position_order", body: { ...base, slPrice, slStopType: "MARK", slOrderType: "MARKET" } },
+    { endpoint: "/api/v1/futures/tpsl/place_position_order", body: { ...base, slPrice, slStopType: "MARK_PRICE", slOrderType: "MARKET" } },
+    { endpoint: "/api/v1/futures/tpsl/place_position_order", body: { ...base, slPrice, slStopType: "MARK", slOrderType: "MARKET", tpPrice, tpStopType: "MARK", tpOrderType: "MARKET" } },
+    { endpoint: "/api/v1/futures/tpsl/place_order", body: { ...base, slPrice, slStopType: "MARK", slOrderType: "MARKET" } },
+    { endpoint: "/api/v1/futures/tpsl/place_position_order", body: { symbol, slPrice, slStopType: "MARK", slOrderType: "MARKET" } },
   ];
-
-  // Group B: /api/v1/futures/plan/order — the conditional order endpoint
-  const groupB = [
-    { endpoint: "/api/v1/futures/plan/order", body: { ...base, type: "STOP_MARKET", triggerPrice, triggerType: "MARK_PRICE" } },
-    { endpoint: "/api/v1/futures/plan/order", body: { ...base, type: "STOP_MARKET", triggerPrice, triggerType: "LAST_PRICE" } },
-    { endpoint: "/api/v1/futures/plan/order", body: { ...base, type: "STOP_MARKET", triggerPrice } },
-    { endpoint: "/api/v1/futures/plan/order", body: { ...base, type: "STOP",        triggerPrice, triggerType: "MARK_PRICE" } },
-    { endpoint: "/api/v1/futures/plan/order", body: { symbol, side: "SELL", type: "STOP_MARKET", qty: "0.001", triggerPrice, triggerType: "MARK_PRICE" } },
-  ];
-
-  // Group C: larger qty in case 0.001 is below minimum lot size
-  const groupC = [
-    { endpoint: "/api/v1/futures/plan/order", body: { ...base, qty: "0.01", type: "STOP_MARKET", triggerPrice, triggerType: "MARK_PRICE" } },
-    { endpoint: "/api/v1/futures/order",      body: { ...base, qty: "0.01", type: "STOP_MARKET", triggerPrice } },
-  ];
-
-  const allVariants = [...groupA, ...groupB, ...groupC];
 
   if (mode !== "real") {
-    return NextResponse.json({ mode: "dry", symbol, triggerPrice, allVariants });
+    return NextResponse.json({ mode: "dry", symbol, slPrice, tpPrice, variants });
   }
 
   const results = [];
-  for (const { endpoint, body } of allVariants) {
+  for (const { endpoint, body } of variants) {
     const result = await callBitunix(endpoint, body);
     const r = result.raw as Record<string, unknown>;
     results.push({ endpoint, body, code: r?.code, msg: r?.msg, httpStatus: result.httpStatus });
