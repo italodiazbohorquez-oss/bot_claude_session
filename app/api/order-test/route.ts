@@ -4,7 +4,10 @@ import crypto from "crypto";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-async function callBitunix(body: Record<string, unknown>): Promise<{ httpStatus: number; raw: unknown }> {
+async function callBitunix(
+  endpoint: string,
+  body: Record<string, unknown>
+): Promise<{ httpStatus: number; raw: unknown }> {
   const apiKey = (process.env.BITUNIX_API_KEY ?? "").trim();
   const apiSecret = (process.env.BITUNIX_API_SECRET ?? "").trim();
   const timestamp = Date.now().toString();
@@ -12,7 +15,7 @@ async function callBitunix(body: Record<string, unknown>): Promise<{ httpStatus:
   const bodyStr = JSON.stringify(body);
   const digest = crypto.createHash("sha256").update(nonce + timestamp + apiKey + "" + bodyStr).digest("hex");
   const signature = crypto.createHash("sha256").update(digest + apiSecret).digest("hex");
-  const res = await fetch("https://fapi.bitunix.com/api/v1/futures/order", {
+  const res = await fetch(`https://fapi.bitunix.com${endpoint}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json", "language": "en-US",
@@ -33,25 +36,38 @@ export async function GET(req: Request) {
 
   const triggerPrice = "1000.00";
   const base = { symbol, side: "SELL", positionSide: "LONG", qty: "0.001" };
-  const variants = [
-    { ...base, type: "STOP_MARKET", triggerPrice, reduceOnly: true },
-    { ...base, type: "STOP",        triggerPrice, reduceOnly: true },
-    { ...base, type: "STOP_MARKET", triggerPrice },
-    { ...base, type: "STOP",        triggerPrice },
-    { symbol,  side: "SELL", type: "STOP_MARKET", qty: "0.001", triggerPrice },
-    { symbol,  side: "SELL", type: "STOP",        qty: "0.001", triggerPrice },
+
+  // Group A: /api/v1/futures/order (current — all failing with code 2)
+  const groupA = [
+    { endpoint: "/api/v1/futures/order", body: { ...base, type: "STOP_MARKET", triggerPrice, reduceOnly: true } },
   ];
 
+  // Group B: /api/v1/futures/plan/order — the conditional order endpoint
+  const groupB = [
+    { endpoint: "/api/v1/futures/plan/order", body: { ...base, type: "STOP_MARKET", triggerPrice, triggerType: "MARK_PRICE" } },
+    { endpoint: "/api/v1/futures/plan/order", body: { ...base, type: "STOP_MARKET", triggerPrice, triggerType: "LAST_PRICE" } },
+    { endpoint: "/api/v1/futures/plan/order", body: { ...base, type: "STOP_MARKET", triggerPrice } },
+    { endpoint: "/api/v1/futures/plan/order", body: { ...base, type: "STOP",        triggerPrice, triggerType: "MARK_PRICE" } },
+    { endpoint: "/api/v1/futures/plan/order", body: { symbol, side: "SELL", type: "STOP_MARKET", qty: "0.001", triggerPrice, triggerType: "MARK_PRICE" } },
+  ];
+
+  // Group C: larger qty in case 0.001 is below minimum lot size
+  const groupC = [
+    { endpoint: "/api/v1/futures/plan/order", body: { ...base, qty: "0.01", type: "STOP_MARKET", triggerPrice, triggerType: "MARK_PRICE" } },
+    { endpoint: "/api/v1/futures/order",      body: { ...base, qty: "0.01", type: "STOP_MARKET", triggerPrice } },
+  ];
+
+  const allVariants = [...groupA, ...groupB, ...groupC];
+
   if (mode !== "real") {
-    return NextResponse.json({ mode: "dry", symbol, triggerPrice, variants });
+    return NextResponse.json({ mode: "dry", symbol, triggerPrice, allVariants });
   }
 
   const results = [];
-  for (const body of variants) {
-    const result = await callBitunix(body);
+  for (const { endpoint, body } of allVariants) {
+    const result = await callBitunix(endpoint, body);
     const r = result.raw as Record<string, unknown>;
-    results.push({ body, code: r?.code, msg: r?.msg, httpStatus: result.httpStatus });
-    if (r?.code === 0 || (typeof r?.code === "number" && r?.code !== 2)) break;
+    results.push({ endpoint, body, code: r?.code, msg: r?.msg, httpStatus: result.httpStatus });
   }
 
   return NextResponse.json({ mode: "real", symbol, results });
