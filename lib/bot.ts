@@ -428,7 +428,8 @@ export async function runBotForSymbol(symbol: string): Promise<BotRunResult> {
     result.action = "SKIPPED_SIZE_ZERO";
     result.details = { side, entryScore, setupType, close: curCandle.close, capital, riskPerTrade };
     notify(`⚠️ <b>NEXUS IA · TAMAÑO CERO</b>\n━━━━━━━━━━━━━━━━━━\n📊 <b>${symbol}</b> ${side} · Score ${entryScore}/9  [${setupType}]\n🕐 5M ${mtf.tf5m === "BULL" ? "▲" : mtf.tf5m === "BEAR" ? "▼" : "—"} · 15M ${mtf.tf15m === "BULL" ? "▲" : mtf.tf15m === "BEAR" ? "▼" : "—"} · 1H ${mtf.tf1h === "BULL" ? "▲" : mtf.tf1h === "BEAR" ? "▼" : "—"} · 4H ${mtf.tf4h === "BULL" ? "▲" : mtf.tf4h === "BEAR" ? "▼" : "—"}\n💵 Entry aprox: $${curCandle.close.toFixed(curCandle.close >= 1000 ? 0 : 4)}\n💰 Capital $${capital} insuficiente para min. stepSize\n⚡ Ajustar capital o stepSize en config`).catch(() => {});
-  return result;
+    return result;
+  }
 
   // 7. Ejecutar orden de mercado
   let orderId = "";
