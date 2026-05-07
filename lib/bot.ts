@@ -253,8 +253,11 @@ export async function runBotForSymbol(symbol: string): Promise<BotRunResult> {
   const persist15mLong  = sqz15m.sqzVal > 0 && sqz15mPrev.sqzVal > 0;
   const persist15mShort = sqz15m.sqzVal < 0 && sqz15mPrev.sqzVal < 0;
 
+    // ONE_TF entries require a higher score since 4H is not aligned
+  const effectiveMinScore = mtf.setup === "ONE_TF" ? minScore + 1 : minScore;
+
   const canOpenLong =
-    effectiveScoreLong >= minScore &&
+    effectiveScoreLong >= effectiveMinScore &&
     mtf.direction === "LONG" &&
     mtf.canTrade &&
     adxStrength !== "WEAK" &&
@@ -262,7 +265,7 @@ export async function runBotForSymbol(symbol: string): Promise<BotRunResult> {
     persist15mLong;
 
   const canOpenShort =
-    effectiveScoreShort >= minScore &&
+    effectiveScoreShort >= effectiveMinScore &&
     mtf.direction === "SHORT" &&
     mtf.canTrade &&
     adxStrength !== "WEAK" &&
