@@ -1,7 +1,7 @@
 import type { SqzResult } from "./sqz";
 
 export type MtfDirection = "LONG" | "SHORT" | "WAIT";
-export type MtfSetup = "PERFECT" | "TWO_TF" | "RSI_PIVOT" | "TRAP" | "BLOCKED";
+export type MtfSetup = "PERFECT" | "TWO_TF" | "ONE_TF" | "RSI_PIVOT" | "TRAP" | "BLOCKED";
 
 export interface MtfResult {
   canTrade: boolean;
@@ -66,6 +66,14 @@ export function calcMtf(inputs: MtfInputs): MtfResult {
   }
   if (d4h === "BEAR" && d1h === "BEAR" && tf1hConsecutiveBear >= 4 && d15m === "BEAR") {
     return { canTrade: true, direction: "SHORT", setup: "TWO_TF", tf5m: d5m, tf15m: d15m, tf1h: d1h, tf4h: d4h };
+  }
+
+  // ONE_TF: 1H + 15M alineados — 4H puede ser opuesto (requiere score más alto)
+  if (d1h === "BULL" && d15m === "BULL") {
+    return { canTrade: true, direction: "LONG", setup: "ONE_TF", tf5m: d5m, tf15m: d15m, tf1h: d1h, tf4h: d4h };
+  }
+  if (d1h === "BEAR" && d15m === "BEAR") {
+    return { canTrade: true, direction: "SHORT", setup: "ONE_TF", tf5m: d5m, tf15m: d15m, tf1h: d1h, tf4h: d4h };
   }
 
   return { canTrade: false, direction: "WAIT", setup: "BLOCKED", tf5m: d5m, tf15m: d15m, tf1h: d1h, tf4h: d4h };
