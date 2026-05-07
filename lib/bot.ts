@@ -211,18 +211,7 @@ export async function runBotForSymbol(symbol: string): Promise<BotRunResult> {
     return result;
   }
 
-    // 1H sigue confirmando — mantener posición
-    result.action = "POSITION_ACTIVE";
-    result.details = {
-      side: openPosition.side,
-      size: openPosition.size,
-      entryPrice: openPosition.entryPrice,
-      unrealizedPnl: openPosition.unrealizedPnl,
-      h1Confirmed: true,
-      h1Direction: h1Bull ? "BULL" : "BEAR",
-    };
-    return result;
-  }
+   
 
   // 4. MTF confluence
   const tf1hConsecutiveBull = countConsecutiveDir([sqz1h], "BULL");
