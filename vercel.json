@@ -6,11 +6,5 @@
     "app/api/bitunix/route.ts": {
       "maxDuration": 30
     }
-  },
-  "crons": [
-    {
-      "path": "/api/cron",
-      "schedule": "0 * * * *"
-    }
-  ]
+  }
 }
