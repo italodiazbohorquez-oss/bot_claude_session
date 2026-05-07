@@ -16,7 +16,8 @@ async function callBitunix(body: Record<string, unknown>): Promise<{ httpStatus:
   const res = await fetch("https://fapi.bitunix.com/api/v1/futures/order", {
     method: "POST",
     headers: { "Content-Type": "application/json", "language": "en-US", "api-key": apiKey, "sign": signature, "timestamp": timestamp, "nonce": nonce },
-    body: bodyStr, signal: AbortSignal.timeout(8000),
+    body: bodyStr,
+    signal: AbortSignal.timeout(8000),
   });
   let raw: unknown;
   try { raw = await res.json(); } catch (e) { raw = String(e); }
@@ -33,7 +34,15 @@ export async function GET(req: Request) {
     const price = ticker.lastPrice;
     const triggerPrice = parseFloat((price * 0.95).toFixed(2)).toString();
 
-    const body = { symbol, side: "SELL", positionSide: "LONG", type: "STOP_MARKET", qty: "0.001", triggerPrice, reduceOnly: true };
+    const body = {
+      symbol,
+      side: "SELL",
+      positionSide: "LONG",
+      type: "STOP_MARKET",
+      qty: "0.001",
+      triggerPrice,
+      reduceOnly: true,
+    };
 
     if (mode !== "real") {
       return NextResponse.json({ mode: "dry", symbol, price, body, note: "Add ?mode=real to send to Bitunix" });
