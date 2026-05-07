@@ -134,12 +134,12 @@ interface RawTicker {
 }
 
 export async function getTicker(symbol: string): Promise<{ lastPrice: number; markPrice: number }> {
-  const raw = await request<RawTicker | RawTicker[]>("GET", "/api/v1/futures/market/ticker", { symbol }, {}, false);
-  const data = Array.isArray(raw) ? raw[0] : raw;
-  return {
-    lastPrice: parseFloat(data.lastPrice),
-    markPrice: parseFloat(data.markPrice),
-  };
+  // Bitunix ticker endpoint is unreliable — use last 1m candle close instead
+  const raw = await request<RawKline[]>("GET", "/api/v1/futures/market/kline", {
+    symbol, interval: "1m", limit: 1,
+  }, {}, false);
+  const price = parseFloat(raw[raw.length - 1]?.close ?? "0");
+  return { lastPrice: price, markPrice: price };
 }
 
 // ── Account balance
