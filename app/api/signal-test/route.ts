@@ -121,6 +121,8 @@ export async function GET(req: Request) {
     highSqz: sqz15m.highSqz, midSqz: sqz15m.midSqz,
     sqzOff: sqz15m.sqzOff, sqzOn: sqz15m.sqzOn,
     adxStrength: sqz15m.adxStrength,
+    setupType: `CEREBRO_${mtf.setup}_${side}`,
+    tf5m: mtf.tf5m, tf15m: mtf.tf15m, tf1h: mtf.tf1h, tf4h: mtf.tf4h,
   });
 
   await notify(msg);
