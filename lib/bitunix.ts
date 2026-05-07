@@ -160,6 +160,7 @@ export async function getRawAccount(): Promise<Record<string, unknown>> {
 
 // ── Positions
 interface RawPosition {
+  positionId: string; 
   symbol: string;
   positionSide: string;   // "LONG" | "SHORT" in HEDGE mode
   side: string;            // "BUY" | "SELL" (opening side)
@@ -173,6 +174,7 @@ interface RawPosition {
 }
 
 export interface Position {
+  positionId: string; 
   symbol: string;
   side: "LONG" | "SHORT";
   size: number;
@@ -186,6 +188,7 @@ function parseRawPosition(pos: RawPosition): Position {
     ? pos.positionSide as "LONG" | "SHORT"
     : pos.side === "BUY" ? "LONG" : "SHORT";
   return {
+    positionId: pos.positionId ?? "",
     symbol: pos.symbol,
     side,
     size: parseFloat(pos.size ?? pos.qty ?? "0"),
@@ -260,14 +263,9 @@ export async function placeOrder(params: OrderParams): Promise<string> {
 
 export async function cancelOrder(symbol: string, orderId: string): Promise<void> {
   if (process.env.IS_TESTNET === "true") {
-    console.log("[TESTNET] Would cancel order:", orderId);
-    return;
-  }
-  await request("POST", "/api/v1/futures/order/cancel", {}, { symbol, orderId });
-}
-export async function placePositionSlTp(params: {
+    console.log("[TESTNET] Would export async function placePositionSlTp(params: {
   symbol: string;
-  positionSide: "LONG" | "SHORT";
+  positionId: string;
   sl?: number;
   tp?: number;
 }): Promise<void> {
@@ -278,7 +276,7 @@ export async function placePositionSlTp(params: {
 
   const body: Record<string, unknown> = {
     symbol: params.symbol,
-    positionSide: params.positionSide,
+    positionId: params.positionId,
   };
 
   if (params.sl !== undefined) {
@@ -293,8 +291,13 @@ export async function placePositionSlTp(params: {
     body.tpOrderType = "MARKET";
   }
 
-  await request("POST", "/api/v1/futures/tpsl/place_position_order", {}, body);
+  await request("POST", "/api/v1/futures/tpsl/position/place_order", {}, body);
+}cancel order:", orderId);
+    return;
+  }
+  await request("POST", "/api/v1/futures/order/cancel", {}, { symbol, orderId });
 }
+
 
 export async function setLeverage(symbol: string, leverage: number): Promise<void> {
   if (process.env.IS_TESTNET === "true") return;
