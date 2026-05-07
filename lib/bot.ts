@@ -467,8 +467,12 @@ export async function runBotForSymbol(symbol: string): Promise<BotRunResult> {
   signalLog.action_taken = `OPENED_${side}`;
   await saveSignalLog(signalLog);
   // 9. Colocar SL/TP — si falla, la posición está abierta sin stops → notificar
-   try {
-    await placePositionSlTp({ symbol, positionSide: side, sl, tp });
+     // 9. Colocar SL/TP — obtener positionId del exchange, luego colocar stops
+  try {
+    const openPos = await getPosition(symbol);
+    const positionId = openPos?.positionId ?? "";
+    if (!positionId) throw new Error("positionId vacío tras abrir posición");
+    await placePositionSlTp({ symbol, positionId, sl, tp });
   } catch (e) {
     console.error(`[Bot] SL/TP placement failed for ${symbol}: ${e}`);
     notify(`⚠️ <b>NEXUS IA · SIN STOPS</b>\n${symbol} ${side} abierto\nSL/TP fallaron: ${String(e).slice(0, 100)}\n⚡ Coloca SL/TP manualmente`).catch(() => {});
