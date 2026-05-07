@@ -1,4 +1,4 @@
-import { getCandles, getPosition, placeOrder, type Position } from "./bitunix";
+import { getCandles, getPosition, placeOrder, placePositionSlTp, type Position } from "./bitunix";
 import { calcSqz } from "./sqz";
 import { calcMtf, countConsecutiveDir } from "./mtf";
 import { calcRsiSignal, rsiLongSignal, rsiShortSignal } from "./rsi";
@@ -467,17 +467,8 @@ export async function runBotForSymbol(symbol: string): Promise<BotRunResult> {
   signalLog.action_taken = `OPENED_${side}`;
   await saveSignalLog(signalLog);
   // 9. Colocar SL/TP — si falla, la posición está abierta sin stops → notificar
-  try {
-    await placeOrder({
-      symbol, side: closeSide, positionSide: side,
-      type: "STOP_MARKET", quantity: posResult.contracts,
-      stopPrice: sl, reduceOnly: true,
-    });
-    await placeOrder({
-      symbol, side: closeSide, positionSide: side,
-      type: "TAKE_PROFIT_MARKET", quantity: posResult.contracts,
-      stopPrice: tp, reduceOnly: true,
-    });
+   try {
+    await placePositionSlTp({ symbol, positionSide: side, sl, tp });
   } catch (e) {
     console.error(`[Bot] SL/TP placement failed for ${symbol}: ${e}`);
     notify(`⚠️ <b>NEXUS IA · SIN STOPS</b>\n${symbol} ${side} abierto\nSL/TP fallaron: ${String(e).slice(0, 100)}\n⚡ Coloca SL/TP manualmente`).catch(() => {});
