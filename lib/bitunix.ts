@@ -160,7 +160,7 @@ export async function getRawAccount(): Promise<Record<string, unknown>> {
 
 // ── Positions
 interface RawPosition {
-  positionId: string; 
+  positionId: string;
   symbol: string;
   positionSide: string;   // "LONG" | "SHORT" in HEDGE mode
   side: string;            // "BUY" | "SELL" (opening side)
@@ -174,7 +174,7 @@ interface RawPosition {
 }
 
 export interface Position {
-  positionId: string; 
+  positionId: string;
   symbol: string;
   side: "LONG" | "SHORT";
   size: number;
@@ -254,7 +254,7 @@ export async function placeOrder(params: OrderParams): Promise<string> {
     reduceOnly: params.reduceOnly ?? false,
   };
   if (params.price !== undefined) body.price = params.price.toString();
-  if (params.stopPrice !== undefined)     body.triggerPrice = params.stopPrice.toString(); // Bitunix uses triggerPrice for conditional orders
+  if (params.stopPrice !== undefined) body.triggerPrice = params.stopPrice.toString();
   if (params.timeInForce) body.timeInForce = params.timeInForce;
 
   const data = await request<RawOrder>("POST", "/api/v1/futures/order", {}, body);
@@ -263,7 +263,13 @@ export async function placeOrder(params: OrderParams): Promise<string> {
 
 export async function cancelOrder(symbol: string, orderId: string): Promise<void> {
   if (process.env.IS_TESTNET === "true") {
-    console.log("[TESTNET] Would export async function placePositionSlTp(params: {
+    console.log("[TESTNET] Would cancel order:", orderId);
+    return;
+  }
+  await request("POST", "/api/v1/futures/order/cancel", {}, { symbol, orderId });
+}
+
+export async function placePositionSlTp(params: {
   symbol: string;
   positionId: string;
   sl?: number;
@@ -292,12 +298,7 @@ export async function cancelOrder(symbol: string, orderId: string): Promise<void
   }
 
   await request("POST", "/api/v1/futures/tpsl/position/place_order", {}, body);
-}cancel order:", orderId);
-    return;
-  }
-  await request("POST", "/api/v1/futures/order/cancel", {}, { symbol, orderId });
 }
-
 
 export async function setLeverage(symbol: string, leverage: number): Promise<void> {
   if (process.env.IS_TESTNET === "true") return;
