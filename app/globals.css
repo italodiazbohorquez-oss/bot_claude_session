@@ -291,5 +291,41 @@ html, body { background: var(--bg-0); color: var(--t-100); font-family: var(--fo
 .negative { color: var(--bear); }
 .neutral  { color: var(--t-300); }
 
+/* ── PWA / Mobile ── */
+.nx-bottom-nav { display: none; }
+
+@media (max-width: 768px) {
+  .nx-sidebar { display: none !important; }
+
+  .nx-bottom-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    height: 62px;
+    background: rgba(10, 12, 26, 0.97);
+    border-top: 1px solid var(--hairline);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    z-index: 200;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .nx-bottom-nav-item {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 3px; border: none; background: none;
+    color: var(--t-400); cursor: pointer; transition: color .15s; padding: 8px 0;
+  }
+  .nx-bottom-nav-item.active { color: var(--neon-cyan); }
+  .nx-bottom-nav-item span:first-child { font-size: 18px; }
+  .nx-bottom-nav-item span:last-child {
+    font-family: var(--font-mono); font-size: 9px;
+    letter-spacing: 0.08em; text-transform: uppercase;
+  }
+  .nx-main-content { padding-bottom: 72px !important; padding: 12px 10px !important; }
+  .nx-account-ribbon { grid-template-columns: repeat(2, 1fr) !important; }
+  .nx-watchlist-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .nx-topbar-sub { display: none; }
+  .nx-grid-responsive { grid-template-columns: 1fr !important; }
+}
 /* ── Legacy compat (used by /api/test output) ── */
 a { color: var(--neon-cyan); text-decoration: none; }
