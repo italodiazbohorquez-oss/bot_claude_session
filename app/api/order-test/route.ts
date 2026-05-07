@@ -4,7 +4,7 @@ import crypto from "crypto";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-async function callBitunix(
+async function callBitunixPost(
   endpoint: string,
   body: Record<string, unknown>
 ): Promise<{ httpStatus: number; raw: unknown }> {
@@ -29,15 +29,33 @@ async function callBitunix(
   return { httpStatus: res.status, raw };
 }
 
+async function callBitunixGet(path: string, params: Record<string, string> = {}): Promise<unknown> {
+  const qs = new URLSearchParams(params).toString();
+  const url = `https://fapi.bitunix.com${path}${qs ? "?" + qs : ""}`;
+  const res = await fetch(url, {
+    headers: { "Content-Type": "application/json", "language": "en-US" },
+    signal: AbortSignal.timeout(8000),
+  });
+  return res.json();
+}
+
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const symbol = (searchParams.get("symbol") ?? "ETHUSDT").toUpperCase();
   const mode = searchParams.get("mode") ?? "dry";
   const positionId = searchParams.get("positionId") ?? "fake-id-000";
 
+  if (mode === "ticker") {
+    // Diagnostic: test both ticker endpoints raw
+    const [r1, r2] = await Promise.all([
+      callBitunixGet("/api/v1/futures/market/ticker", { symbol }),
+      callBitunixGet("/api/v1/futures/ticker", { symbol }),
+    ]);
+    return NextResponse.json({ symbol, marketTicker: r1, plainTicker: r2 });
+  }
+
   const slPrice = "1000.00";
   const tpPrice = "5000.00";
-
   const variants = [
     { endpoint: "/api/v1/futures/tpsl/position/place_order", body: { symbol, positionId, slPrice, slStopType: "MARK" } },
     { endpoint: "/api/v1/futures/tpsl/position/place_order", body: { symbol, positionId, slPrice, slStopType: "MARK", tpPrice, tpStopType: "MARK" } },
@@ -52,10 +70,9 @@ export async function GET(req: Request) {
 
   const results = [];
   for (const { endpoint, body } of variants) {
-    const result = await callBitunix(endpoint, body);
+    const result = await callBitunixPost(endpoint, body);
     const r = result.raw as Record<string, unknown>;
     results.push({ endpoint, body, code: r?.code, msg: r?.msg, httpStatus: result.httpStatus });
   }
-
   return NextResponse.json({ mode: "real", symbol, results });
 }
