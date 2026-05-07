@@ -11,23 +11,29 @@ export async function GET(_req: NextRequest) {
   const symbolsEnv = process.env.SYMBOLS ?? DEFAULT_SYMBOLS;
   const symbols = symbolsEnv.split(",").map(s => s.trim()).filter(Boolean);
 
-  const startTime = Date.now();
+    const startTime = Date.now();
   const results = [];
 
-  for (const symbol of symbols) {
-    const elapsed = Date.now() - startTime;
-    // Leave 2s buffer for Vercel response overhead
-    if (elapsed > 55000) {
-      results.push({ symbol, action: "TIMEOUT_SKIP", timestamp: new Date().toISOString() });
+  // Process in parallel batches of 3 to fit all symbols in 60s window
+  const BATCH_SIZE = 3;
+  for (let i = 0; i < symbols.length; i += BATCH_SIZE) {
+    if (Date.now() - startTime > 50000) {
+      symbols.slice(i).forEach(s =>
+        results.push({ symbol: s, action: "TIMEOUT_SKIP", timestamp: new Date().toISOString() })
+      );
       break;
     }
-    try {
-      const result = await runBotForSymbol(symbol);
-      results.push(result);
-      console.log(`[NEXUS] ${symbol}: ${result.action}`);
-    } catch (e) {
-      console.error(`[NEXUS] ${symbol} error:`, e);
-      results.push({ symbol, action: "UNCAUGHT_ERROR", error: String(e), timestamp: new Date().toISOString() });
+    const batch = symbols.slice(i, i + BATCH_SIZE);
+    const batchResults = await Promise.allSettled(batch.map(s => runBotForSymbol(s)));
+    for (let j = 0; j < batch.length; j++) {
+      const r = batchResults[j];
+      if (r.status === "fulfilled") {
+        results.push(r.value);
+        console.log(`[NEXUS] ${batch[j]}: ${r.value.action}`);
+      } else {
+        console.error(`[NEXUS] ${batch[j]} error:`, r.reason);
+        results.push({ symbol: batch[j], action: "UNCAUGHT_ERROR", error: String(r.reason), timestamp: new Date().toISOString() });
+      }
     }
   }
 
