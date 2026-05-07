@@ -127,7 +127,17 @@ export async function runBotForSymbol(symbol: string): Promise<BotRunResult> {
     }
   }
 
-    if (openPosition) {
+      // Skip management for positions the bot didn't open (manually opened on exchange)
+  if (openPosition && !exchangeFetchError) {
+    const dbTrade = await getOpenTrade(symbol);
+    if (!dbTrade) {
+      result.action = "MANUAL_POSITION";
+      result.details = { side: openPosition.side, size: openPosition.size, entryPrice: openPosition.entryPrice };
+      return result;
+    }
+  }
+
+  if (openPosition) {
     const h1Bull = sqz1h.sqzVal > 0;
     const h4Bull = sqz4h.sqzVal > 0;
     const posLong = openPosition.side === "LONG";
@@ -418,7 +428,7 @@ export async function runBotForSymbol(symbol: string): Promise<BotRunResult> {
     return result;
   }
 
-  // 7. Ejecutar órdenes en Bitunix
+  // 7. Ejecutar orden de mercado
   let orderId = "";
   const orderSide = side === "LONG" ? "BUY" : "SELL";
   const closeSide = side === "LONG" ? "SELL" : "BUY";
@@ -428,23 +438,17 @@ export async function runBotForSymbol(symbol: string): Promise<BotRunResult> {
       symbol, side: orderSide, positionSide: side,
       type: "MARKET", quantity: posResult.contracts,
     });
-    await placeOrder({
-      symbol, side: closeSide, positionSide: side,
-      type: "STOP_MARKET", quantity: posResult.contracts,
-      stopPrice: sl, reduceOnly: true,
-    });
-    await placeOrder({
-      symbol, side: closeSide, positionSide: side,
-      type: "TAKE_PROFIT_MARKET", quantity: posResult.contracts,
-      stopPrice: tp, reduceOnly: true,
-    });
   } catch (e) {
+    const errMsg = String(e).slice(0, 150);
     signalLog.action_taken = "ORDER_ERROR";
+    signalLog.mtf_setup = `${signalLog.mtf_setup}|ERR:${errMsg}`;
     await saveSignalLog(signalLog);
     result.action = "ORDER_ERROR";
-    result.details = { error: String(e), side, sl, tp };
+    result.details = { error: String(e), step: "MARKET", side, sl, tp };
     return result;
   }
+
+  // 8. Guardar en Supabase inmediatamente — antes de SL/TP
 
   // 8. Guardar en Supabase
   await saveTrade({
@@ -462,7 +466,22 @@ export async function runBotForSymbol(symbol: string): Promise<BotRunResult> {
 
   signalLog.action_taken = `OPENED_${side}`;
   await saveSignalLog(signalLog);
-
+  // 9. Colocar SL/TP — si falla, la posición está abierta sin stops → notificar
+  try {
+    await placeOrder({
+      symbol, side: closeSide, positionSide: side,
+      type: "STOP_MARKET", quantity: posResult.contracts,
+      stopPrice: sl, reduceOnly: true,
+    });
+    await placeOrder({
+      symbol, side: closeSide, positionSide: side,
+      type: "TAKE_PROFIT_MARKET", quantity: posResult.contracts,
+      stopPrice: tp, reduceOnly: true,
+    });
+  } catch (e) {
+    console.error(`[Bot] SL/TP placement failed for ${symbol}: ${e}`);
+    notify(`⚠️ <b>NEXUS IA · SIN STOPS</b>\n${symbol} ${side} abierto\nSL/TP fallaron: ${String(e).slice(0, 100)}\n⚡ Coloca SL/TP manualmente`).catch(() => {});
+  }
   notify(buildOpenedMsg({
     symbol, side,
     entryPrice: curCandle.close,
