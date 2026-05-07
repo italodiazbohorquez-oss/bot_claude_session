@@ -66,6 +66,7 @@ export function buildOpenedMsg(ctx: OpenedCtx): string {
 ⚡ Sqz: ${sqzLabel(highSqz, midSqz, sqzOff, sqzOn)}
 💪 ADX: ${adxStrength}  |  🕐 ${session}
 🕑 ${localTime()} (Lima)`;
+}
 
 export interface ClosedCtx {
   symbol: string; side: "LONG" | "SHORT";
