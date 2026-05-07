@@ -33,21 +33,21 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const symbol = (searchParams.get("symbol") ?? "ETHUSDT").toUpperCase();
   const mode = searchParams.get("mode") ?? "dry";
+  const positionId = searchParams.get("positionId") ?? "fake-id-000";
 
   const slPrice = "1000.00";
   const tpPrice = "5000.00";
-  const base = { symbol, positionSide: "LONG" };
 
   const variants = [
-    { endpoint: "/api/v1/futures/tpsl/place_position_order", body: { ...base, slPrice, slStopType: "MARK", slOrderType: "MARKET" } },
-    { endpoint: "/api/v1/futures/tpsl/place_position_order", body: { ...base, slPrice, slStopType: "MARK_PRICE", slOrderType: "MARKET" } },
-    { endpoint: "/api/v1/futures/tpsl/place_position_order", body: { ...base, slPrice, slStopType: "MARK", slOrderType: "MARKET", tpPrice, tpStopType: "MARK", tpOrderType: "MARKET" } },
-    { endpoint: "/api/v1/futures/tpsl/place_order", body: { ...base, slPrice, slStopType: "MARK", slOrderType: "MARKET" } },
-    { endpoint: "/api/v1/futures/tpsl/place_position_order", body: { symbol, slPrice, slStopType: "MARK", slOrderType: "MARKET" } },
+    { endpoint: "/api/v1/futures/tpsl/position/place_order", body: { symbol, positionId, slPrice, slStopType: "MARK" } },
+    { endpoint: "/api/v1/futures/tpsl/position/place_order", body: { symbol, positionId, slPrice, slStopType: "MARK", tpPrice, tpStopType: "MARK" } },
+    { endpoint: "/api/v1/futures/tpsl/position/place_order", body: { symbol, positionId, slPrice, slStopType: "LAST_PRICE" } },
+    { endpoint: "/api/v1/futures/tpsl/place_order", body: { symbol, positionId, slPrice, slStopType: "MARK", slOrderType: "MARKET" } },
+    { endpoint: "/api/v1/futures/tpsl/position/place_order", body: { symbol, slPrice, slStopType: "MARK" } },
   ];
 
   if (mode !== "real") {
-    return NextResponse.json({ mode: "dry", symbol, slPrice, tpPrice, variants });
+    return NextResponse.json({ mode: "dry", symbol, positionId, slPrice, tpPrice, variants });
   }
 
   const results = [];
