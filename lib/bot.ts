@@ -116,6 +116,7 @@ export async function runBotForSymbol(symbol: string): Promise<BotRunResult> {
         ? curClose - dbTrade.entry_price
         : dbTrade.entry_price - curClose;
       openPosition = {
+        positionId: "",
         symbol,
         side: dbTrade.side,
         size: dbTrade.size,
