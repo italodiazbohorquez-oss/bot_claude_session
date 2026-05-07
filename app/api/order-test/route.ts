@@ -34,22 +34,29 @@ export async function GET(req: Request) {
     const price = ticker.lastPrice;
     const triggerPrice = parseFloat((price * 0.95).toFixed(2)).toString();
 
-    const body = {
-      symbol,
-      side: "SELL",
-      positionSide: "LONG",
-      type: "STOP_MARKET",
-      qty: "0.001",
-      triggerPrice,
-      reduceOnly: true,
-    };
+    const base = { symbol, side: "SELL", positionSide: "LONG", qty: "0.001" };
+    const variants = [
+      { ...base, type: "STOP_MARKET", triggerPrice, reduceOnly: true },
+      { ...base, type: "STOP",        triggerPrice, reduceOnly: true },
+      { ...base, type: "STOP_MARKET", triggerPrice },
+      { ...base, type: "STOP",        triggerPrice },
+      { symbol, side: "SELL", type: "STOP_MARKET", qty: "0.001", triggerPrice, reduceOnly: true },
+      { symbol, side: "SELL", type: "STOP",        qty: "0.001", triggerPrice, reduceOnly: true },
+    ];
 
     if (mode !== "real") {
-      return NextResponse.json({ mode: "dry", symbol, price, body, note: "Add ?mode=real to send to Bitunix" });
+      return NextResponse.json({ mode: "dry", symbol, price, variants });
     }
 
-    const result = await callBitunix(body);
-    return NextResponse.json({ mode: "real", symbol, price, body, bitunixResponse: result.raw, httpStatus: result.httpStatus });
+    const results = [];
+    for (const body of variants) {
+      const result = await callBitunix(body);
+      const r = result.raw as Record<string, unknown>;
+      results.push({ body, code: r?.code, msg: r?.msg, httpStatus: result.httpStatus });
+      if (r?.code === 0 || (typeof r?.code === "number" && r?.code !== 2)) break;
+    }
+
+    return NextResponse.json({ mode: "real", symbol, price, results });
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 });
   }
