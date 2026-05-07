@@ -1,0 +1,14 @@
+{
+  "name": "NEXUS IA — Trading Bot",
+  "short_name": "NEXUS IA",
+  "description": "Automated perpetual futures trading bot dashboard",
+  "start_url": "/dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#05060d",
+  "theme_color": "#00e5ff",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
