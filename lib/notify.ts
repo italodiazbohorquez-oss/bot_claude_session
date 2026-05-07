@@ -36,14 +36,29 @@ export interface OpenedCtx {
   score: number; session: string;
   highSqz: boolean; midSqz: boolean; sqzOff: boolean; sqzOn: boolean;
   adxStrength: string;
+  setupType: string;
+  tf5m: string; tf15m: string; tf1h: string; tf4h: string;
+}
+
+function tfArrow(tf: string): string {
+  return tf === "BULL" ? "▲" : tf === "BEAR" ? "▼" : "—";
+}
+
+function setupLabel(setupType: string): string {
+  if (setupType.includes("PERFECT")) return "PERFECT";
+  if (setupType.includes("TWO_TF")) return "TWO_TF";
+  if (setupType.includes("ONE_TF")) return "ONE_TF";
+  if (setupType.includes("RSI")) return "RSI_PIVOT";
+  return setupType;
 }
 
 export function buildOpenedMsg(ctx: OpenedCtx): string {
-  const { symbol, side, entryPrice: e, sl, tp, contracts, positionUsd, riskUsd, score, session, highSqz, midSqz, sqzOff, sqzOn, adxStrength } = ctx;
+  const { symbol, side, entryPrice: e, sl, tp, contracts, positionUsd, riskUsd, score, session, highSqz, midSqz, sqzOff, sqzOn, adxStrength, setupType, tf5m, tf15m, tf1h, tf4h } = ctx;
   const emoji = side === "LONG" ? "🟢" : "🔴";
   return `${emoji} <b>NEXUS IA · ${side} ABIERTO</b>
 ━━━━━━━━━━━━━━━━━━
-📊 <b>${symbol}</b> · Score <b>${score}/9</b>
+📊 <b>${symbol}</b> · Score <b>${score}/9</b>  [${setupLabel(setupType)}]
+🕐 5M ${tfArrow(tf5m)} · 15M ${tfArrow(tf15m)} · 1H ${tfArrow(tf1h)} · 4H ${tfArrow(tf4h)}
 💵 Entry: <code>$${fmtPrice(e)}</code>
 🛑 SL:    <code>$${fmtPrice(sl)}</code>  (-${diffPct(e, sl)}%)
 🎯 TP:    <code>$${fmtPrice(tp)}</code>  (+${diffPct(e, tp)}%)
@@ -51,7 +66,6 @@ export function buildOpenedMsg(ctx: OpenedCtx): string {
 ⚡ Sqz: ${sqzLabel(highSqz, midSqz, sqzOff, sqzOn)}
 💪 ADX: ${adxStrength}  |  🕐 ${session}
 🕑 ${localTime()} (Lima)`;
-}
 
 export interface ClosedCtx {
   symbol: string; side: "LONG" | "SHORT";
