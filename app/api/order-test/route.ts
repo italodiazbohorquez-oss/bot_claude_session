@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { getTicker } from "@/lib/bitunix";
 import crypto from "crypto";
 
 export const runtime = "nodejs";
@@ -15,7 +14,10 @@ async function callBitunix(body: Record<string, unknown>): Promise<{ httpStatus:
   const signature = crypto.createHash("sha256").update(digest + apiSecret).digest("hex");
   const res = await fetch("https://fapi.bitunix.com/api/v1/futures/order", {
     method: "POST",
-    headers: { "Content-Type": "application/json", "language": "en-US", "api-key": apiKey, "sign": signature, "timestamp": timestamp, "nonce": nonce },
+    headers: {
+      "Content-Type": "application/json", "language": "en-US",
+      "api-key": apiKey, "sign": signature, "timestamp": timestamp, "nonce": nonce,
+    },
     body: bodyStr,
     signal: AbortSignal.timeout(8000),
   });
@@ -25,39 +27,32 @@ async function callBitunix(body: Record<string, unknown>): Promise<{ httpStatus:
 }
 
 export async function GET(req: Request) {
-  try {
-    const { searchParams } = new URL(req.url);
-    const symbol = (searchParams.get("symbol") ?? "ETHUSDT").toUpperCase();
-    const mode = searchParams.get("mode") ?? "dry";
+  const { searchParams } = new URL(req.url);
+  const symbol = (searchParams.get("symbol") ?? "ETHUSDT").toUpperCase();
+  const mode = searchParams.get("mode") ?? "dry";
 
-    const ticker = await getTicker(symbol);
-    const price = ticker.lastPrice;
-    const triggerPrice = parseFloat((price * 0.95).toFixed(2)).toString();
+  const triggerPrice = "1000.00";
+  const base = { symbol, side: "SELL", positionSide: "LONG", qty: "0.001" };
+  const variants = [
+    { ...base, type: "STOP_MARKET", triggerPrice, reduceOnly: true },
+    { ...base, type: "STOP",        triggerPrice, reduceOnly: true },
+    { ...base, type: "STOP_MARKET", triggerPrice },
+    { ...base, type: "STOP",        triggerPrice },
+    { symbol,  side: "SELL", type: "STOP_MARKET", qty: "0.001", triggerPrice },
+    { symbol,  side: "SELL", type: "STOP",        qty: "0.001", triggerPrice },
+  ];
 
-    const base = { symbol, side: "SELL", positionSide: "LONG", qty: "0.001" };
-    const variants = [
-      { ...base, type: "STOP_MARKET", triggerPrice, reduceOnly: true },
-      { ...base, type: "STOP",        triggerPrice, reduceOnly: true },
-      { ...base, type: "STOP_MARKET", triggerPrice },
-      { ...base, type: "STOP",        triggerPrice },
-      { symbol, side: "SELL", type: "STOP_MARKET", qty: "0.001", triggerPrice, reduceOnly: true },
-      { symbol, side: "SELL", type: "STOP",        qty: "0.001", triggerPrice, reduceOnly: true },
-    ];
-
-    if (mode !== "real") {
-      return NextResponse.json({ mode: "dry", symbol, price, variants });
-    }
-
-    const results = [];
-    for (const body of variants) {
-      const result = await callBitunix(body);
-      const r = result.raw as Record<string, unknown>;
-      results.push({ body, code: r?.code, msg: r?.msg, httpStatus: result.httpStatus });
-      if (r?.code === 0 || (typeof r?.code === "number" && r?.code !== 2)) break;
-    }
-
-    return NextResponse.json({ mode: "real", symbol, price, results });
-  } catch (e) {
-    return NextResponse.json({ error: String(e) }, { status: 500 });
+  if (mode !== "real") {
+    return NextResponse.json({ mode: "dry", symbol, triggerPrice, variants });
   }
+
+  const results = [];
+  for (const body of variants) {
+    const result = await callBitunix(body);
+    const r = result.raw as Record<string, unknown>;
+    results.push({ body, code: r?.code, msg: r?.msg, httpStatus: result.httpStatus });
+    if (r?.code === 0 || (typeof r?.code === "number" && r?.code !== 2)) break;
+  }
+
+  return NextResponse.json({ mode: "real", symbol, results });
 }
