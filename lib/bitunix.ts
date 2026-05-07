@@ -251,7 +251,7 @@ export async function placeOrder(params: OrderParams): Promise<string> {
     reduceOnly: params.reduceOnly ?? false,
   };
   if (params.price !== undefined) body.price = params.price.toString();
-  if (params.stopPrice !== undefined) body.stopPrice = params.stopPrice.toString();
+  if (params.stopPrice !== undefined)     body.triggerPrice = params.stopPrice.toString(); // Bitunix uses triggerPrice for conditional orders
   if (params.timeInForce) body.timeInForce = params.timeInForce;
 
   const data = await request<RawOrder>("POST", "/api/v1/futures/order", {}, body);
