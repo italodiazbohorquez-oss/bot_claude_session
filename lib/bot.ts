@@ -127,13 +127,15 @@ export async function runBotForSymbol(symbol: string): Promise<BotRunResult> {
     }
   }
 
-  if (openPosition) {
-    // Gestión por 1H: si el 1H revierte contra la posición, cerrar
+    if (openPosition) {
     const h1Bull = sqz1h.sqzVal > 0;
+    const h4Bull = sqz4h.sqzVal > 0;
     const posLong = openPosition.side === "LONG";
     const h1Reversed = (posLong && !h1Bull) || (!posLong && h1Bull);
+    const h4Reversed = (posLong && !h4Bull) || (!posLong && h4Bull);
 
-    if (h1Reversed) {
+    // Cierra solo cuando 4H confirma reversión — es el timeframe de tendencia mayor
+    if (h4Reversed) {
       try {
         await placeOrder({
           symbol,
@@ -151,17 +153,18 @@ export async function runBotForSymbol(symbol: string): Promise<BotRunResult> {
             pnl: openPosition.unrealizedPnl,
           });
         }
-        result.action = "CLOSED_1H_REVERSAL";
+        result.action = "CLOSED_4H_REVERSAL";
         result.details = {
           side: openPosition.side,
           unrealizedPnl: openPosition.unrealizedPnl,
           h1Direction: h1Bull ? "BULL" : "BEAR",
+          h4Direction: h4Bull ? "BULL" : "BEAR",
         };
         notify(buildClosedMsg({
           symbol,
           side: openPosition.side,
           pnl: openPosition.unrealizedPnl,
-          reason: `1H Reversal → ${h1Bull ? "BULL" : "BEAR"}`,
+          reason: `4H Reversal → ${h4Bull ? "BULL" : "BEAR"}`,
         })).catch(() => {});
       } catch (e) {
         result.action = "CLOSE_ERROR";
@@ -169,6 +172,44 @@ export async function runBotForSymbol(symbol: string): Promise<BotRunResult> {
       }
       return result;
     }
+
+    // 1H retrocedió pero 4H sigue alineado → mantener posición (retroceso temporal)
+    if (h1Reversed) {
+      const holdKey = `notify_hold_${symbol}`;
+      const lastHoldTs = await getBotConfig(holdKey);
+      const twoHoursAgo = Date.now() - 2 * 60 * 60 * 1000;
+      if (!lastHoldTs || parseInt(lastHoldTs) < twoHoursAgo) {
+        await setBotConfig(holdKey, String(Date.now()));
+        const pnlStr = `${openPosition.unrealizedPnl >= 0 ? "+" : ""}${openPosition.unrealizedPnl.toFixed(2)}`;
+        notify(`⏸️ <b>NEXUS IA · HOLDING ${symbol}</b>\n━━━━━━━━━━━━━━━━━━\n📊 <b>${symbol}</b> ${openPosition.side}\n🔄 1H retrocedió · 4H sigue ${h4Bull ? "BULL ▲" : "BEAR ▼"}\n💰 PnL actual: ${pnlStr} USDT\n👀 Manteniendo por confluencia 4H`).catch(() => {});
+      }
+      result.action = "HOLDING_1H_RETRACE";
+      result.details = {
+        side: openPosition.side,
+        size: openPosition.size,
+        entryPrice: openPosition.entryPrice,
+        unrealizedPnl: openPosition.unrealizedPnl,
+        h1Direction: h1Bull ? "BULL" : "BEAR",
+        h4Direction: h4Bull ? "BULL" : "BEAR",
+        reason: "1H retracement — 4H still aligned",
+      };
+      return result;
+    }
+
+    // 1H y 4H alineados — mantener posición normalmente
+    result.action = "POSITION_ACTIVE";
+    result.details = {
+      side: openPosition.side,
+      size: openPosition.size,
+      entryPrice: openPosition.entryPrice,
+      unrealizedPnl: openPosition.unrealizedPnl,
+      h1Confirmed: true,
+      h4Confirmed: true,
+      h1Direction: h1Bull ? "BULL" : "BEAR",
+      h4Direction: h4Bull ? "BULL" : "BEAR",
+    };
+    return result;
+  }
 
     // 1H sigue confirmando — mantener posición
     result.action = "POSITION_ACTIVE";
