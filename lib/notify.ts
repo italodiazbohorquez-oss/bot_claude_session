@@ -95,10 +95,11 @@ export interface SetupCtx {
   highSqz: boolean; midSqz: boolean; sqzOff: boolean; sqzOn: boolean;
   adxStrength: string; adxValue: number;
   minScore: number;
+  currentPrice: number; sl: number; tp: number;
 }
 
 export function buildSetupMsg(ctx: SetupCtx): string {
-  const { symbol, side, scoreLong, scoreShort, tf15m, tf1h, tf4h, highSqz, midSqz, sqzOff, sqzOn, adxStrength, adxValue, minScore } = ctx;
+  const { symbol, side, scoreLong, scoreShort, tf15m, tf1h, tf4h, highSqz, midSqz, sqzOff, sqzOn, adxStrength, adxValue, minScore, currentPrice, sl, tp } = ctx;
   const score = side === "LONG" ? scoreLong : scoreShort;
   const missing = minScore - score;
   const arrow15m = tf15m === "BULL" ? "▲" : tf15m === "BEAR" ? "▼" : "—";
@@ -110,6 +111,9 @@ export function buildSetupMsg(ctx: SetupCtx): string {
 📊 <b>${symbol}</b>
 🕐 15M ${arrow15m}  ·  1H ${arrow1h}  ·  4H ${arrow4h}  <i>(confluencia MTF)</i>
 📈 Score: <b>${score}/9</b>  (faltan ${missing} para gatillo ${minScore})
+💵 Precio actual: <code>$${fmtPrice(currentPrice)}</code>
+🛑 SL aprox:     <code>$${fmtPrice(sl)}</code>  (-${diffPct(currentPrice, sl)}%)
+🎯 TP aprox:     <code>$${fmtPrice(tp)}</code>  (+${diffPct(currentPrice, tp)}%)
 ⚡ Sqz: ${sqzLabel(highSqz, midSqz, sqzOff, sqzOn)}
 💪 ADX: ${adxValue.toFixed(1)} ${adxStrength}
 👀 Monitorear entrada en próximas velas 15M
@@ -121,18 +125,27 @@ export interface CompressionCtx {
   scoreLong: number; scoreShort: number;
   highSqz: boolean; midSqz: boolean; sqzOff: boolean; sqzOn: boolean;
   adxStrength: string; minScore: number;
+  currentPrice: number; sl: number; tp: number;
+  tf15m: string; tf1h: string; tf4h: string;
 }
 
 export function buildCompressionMsg(ctx: CompressionCtx): string {
-  const { symbol, scoreLong, scoreShort, highSqz, midSqz, sqzOff, sqzOn, adxStrength, minScore } = ctx;
+  const { symbol, scoreLong, scoreShort, highSqz, midSqz, sqzOff, sqzOn, adxStrength, minScore, currentPrice, sl, tp, tf15m, tf1h, tf4h } = ctx;
   const bestScore = Math.max(scoreLong, scoreShort);
   const dir = scoreLong >= scoreShort ? "LONG" : "SHORT";
+  const arrow15m = tf15m === "BULL" ? "▲" : tf15m === "BEAR" ? "▼" : "—";
+  const arrow1h  = tf1h  === "BULL" ? "▲" : tf1h  === "BEAR" ? "▼" : "—";
+  const arrow4h  = tf4h  === "BULL" ? "▲" : tf4h  === "BEAR" ? "▼" : "—";
   return `⚡ <b>NEXUS IA · COMPRESIÓN + SQUEEZE</b>
 ━━━━━━━━━━━━━━━━━━
 📊 <b>${symbol}</b>
 🔥 ${sqzLabel(highSqz, midSqz, sqzOff, sqzOn)}
+🕐 15M ${arrow15m}  ·  1H ${arrow1h}  ·  4H ${arrow4h}
 📈 LONG: <b>${scoreLong}/9</b>  |  SHORT: <b>${scoreShort}/9</b>
 🎯 Mejor score: <b>${bestScore}/9 ${dir}</b>  (gatillo: ${minScore})
+💵 Precio actual: <code>$${fmtPrice(currentPrice)}</code>
+🛑 SL aprox:     <code>$${fmtPrice(sl)}</code>  (-${diffPct(currentPrice, sl)}%)
+🎯 TP aprox:     <code>$${fmtPrice(tp)}</code>  (+${diffPct(currentPrice, tp)}%)
 💪 ADX: ${adxStrength}
 ⏳ Precio expandiendo — esperando confirmación...
 🕑 ${localTime()} (Lima)`;
