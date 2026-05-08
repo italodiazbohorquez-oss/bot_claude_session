@@ -56,16 +56,13 @@ export async function GET(req: Request) {
 
   const slPrice = "1000.00";
   const tpPrice = "5000.00";
-  // Tiny qty to test parameter validation without risking real execution
-  const qty = "0.001";
-
   const orderVariants = [
-    { label: "tradeSide_OPEN", body: { symbol, side: "SELL", tradeSide: "OPEN", type: "MARKET", qty } },
-    { label: "positionSide_SHORT", body: { symbol, side: "SELL", positionSide: "SHORT", type: "MARKET", qty } },
-    { label: "minimal_no_extra", body: { symbol, side: "SELL", type: "MARKET", qty } },
-    { label: "tradeSide+marginMode", body: { symbol, side: "SELL", tradeSide: "OPEN", type: "MARKET", qty, marginMode: "ISOLATION" } },
-    { label: "positionSide+marginMode", body: { symbol, side: "SELL", positionSide: "SHORT", type: "MARKET", qty, marginMode: "ISOLATION" } },
-    { label: "tradeSide+leverage", body: { symbol, side: "SELL", tradeSide: "OPEN", type: "MARKET", qty, leverage: "5" } },
+    { label: "qty_0.001", body: { symbol, side: "SELL", tradeSide: "OPEN", type: "MARKET", qty: "0.001" } },
+    { label: "qty_1", body: { symbol, side: "SELL", tradeSide: "OPEN", type: "MARKET", qty: "1" } },
+    { label: "qty_10", body: { symbol, side: "SELL", tradeSide: "OPEN", type: "MARKET", qty: "10" } },
+    { label: "qty_100", body: { symbol, side: "SELL", tradeSide: "OPEN", type: "MARKET", qty: "100" } },
+    { label: "qty_1_positionSide", body: { symbol, side: "SELL", positionSide: "SHORT", type: "MARKET", qty: "1" } },
+    { label: "qty_1_minimal", body: { symbol, side: "SELL", type: "MARKET", qty: "1" } },
   ];
 
   const tpslVariants = [
