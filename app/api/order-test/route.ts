@@ -57,16 +57,16 @@ export async function GET(req: Request) {
   const slPrice = "1000.00";
   const tpPrice = "5000.00";
   const orderVariants = [
-    // Endpoint variants
-    { label: "endpoint_order", endpoint: "/api/v1/futures/order", body: { symbol, side: "SELL", tradeSide: "OPEN", type: "MARKET", qty: "1" } },
-    { label: "endpoint_trade_order", endpoint: "/api/v1/futures/trade/order", body: { symbol, side: "SELL", tradeSide: "OPEN", type: "MARKET", qty: "1" } },
-    { label: "endpoint_order_place", endpoint: "/api/v1/futures/order/place", body: { symbol, side: "SELL", tradeSide: "OPEN", type: "MARKET", qty: "1" } },
-    // Lowercase values
-    { label: "lowercase_side_type", endpoint: "/api/v1/futures/order", body: { symbol, side: "sell", tradeSide: "open", type: "market", qty: "1" } },
-    // BUY instead of SELL
-    { label: "buy_side", endpoint: "/api/v1/futures/order", body: { symbol, side: "BUY", tradeSide: "OPEN", type: "MARKET", qty: "1" } },
-    // orderType instead of type
-    { label: "orderType_field", endpoint: "/api/v1/futures/order", body: { symbol, side: "SELL", tradeSide: "OPEN", orderType: "MARKET", qty: "1" } },
+    // Correct endpoint + correct fields (should work)
+    { label: "correct_place_order", endpoint: "/api/v1/futures/trade/place_order", body: { symbol, side: "BUY", tradeSide: "OPEN", orderType: "MARKET", qty: "0.01", effect: "GTC" } },
+    // Correct endpoint without effect
+    { label: "no_effect", endpoint: "/api/v1/futures/trade/place_order", body: { symbol, side: "BUY", tradeSide: "OPEN", orderType: "MARKET", qty: "0.01" } },
+    // Old endpoint with new fields
+    { label: "old_endpoint_new_fields", endpoint: "/api/v1/futures/order", body: { symbol, side: "BUY", tradeSide: "OPEN", orderType: "MARKET", qty: "0.01", effect: "GTC" } },
+    // Old endpoint with old fields
+    { label: "old_endpoint_old_fields", endpoint: "/api/v1/futures/order", body: { symbol, side: "BUY", tradeSide: "OPEN", type: "MARKET", qty: "0.01" } },
+    // SELL variant
+    { label: "sell_correct", endpoint: "/api/v1/futures/trade/place_order", body: { symbol, side: "SELL", tradeSide: "OPEN", orderType: "MARKET", qty: "0.01", effect: "GTC" } },
   ];
 
   const tpslVariants = [

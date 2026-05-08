@@ -152,7 +152,7 @@ export async function runBotForSymbol(symbol: string): Promise<BotRunResult> {
           symbol,
           side: posLong ? "SELL" : "BUY",
           tradeSide: "CLOSE",
-          type: "MARKET",
+          orderType: "MARKET",
           quantity: openPosition.size,
         });
         const openTrade = await getOpenTrade(symbol);
@@ -460,7 +460,7 @@ export async function runBotForSymbol(symbol: string): Promise<BotRunResult> {
   try {
     orderId = await placeOrder({
       symbol, side: orderSide, tradeSide: "OPEN",
-      type: "MARKET", quantity: posResult.contracts,
+      orderType: "MARKET", quantity: posResult.contracts,
     });
   } catch (e) {
     const errMsg = String(e).slice(0, 150);

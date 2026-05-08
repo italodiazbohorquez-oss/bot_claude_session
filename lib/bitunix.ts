@@ -226,11 +226,9 @@ export interface OrderParams {
   symbol: string;
   side: "BUY" | "SELL";
   tradeSide: "OPEN" | "CLOSE";
-  type: "MARKET" | "LIMIT" | "STOP_MARKET" | "TAKE_PROFIT_MARKET";
+  orderType: "MARKET" | "LIMIT";
   quantity: number;
   price?: number;
-  stopPrice?: number;
-  timeInForce?: "GTC" | "IOC" | "FOK";
 }
 
 interface RawOrder {
@@ -249,14 +247,13 @@ export async function placeOrder(params: OrderParams): Promise<string> {
     symbol: params.symbol,
     side: params.side,
     tradeSide: params.tradeSide,
-    type: params.type,
+    orderType: params.orderType,
     qty: params.quantity.toString(),
+    effect: "GTC",
   };
   if (params.price !== undefined) body.price = params.price.toString();
-  if (params.stopPrice !== undefined) body.triggerPrice = params.stopPrice.toString();
-  if (params.timeInForce) body.timeInForce = params.timeInForce;
 
-  const data = await request<RawOrder>("POST", "/api/v1/futures/order", {}, body);
+  const data = await request<RawOrder>("POST", "/api/v1/futures/trade/place_order", {}, body);
   return data.orderId;
 }
 
@@ -265,7 +262,7 @@ export async function cancelOrder(symbol: string, orderId: string): Promise<void
     console.log("[TESTNET] Would cancel order:", orderId);
     return;
   }
-  await request("POST", "/api/v1/futures/order/cancel", {}, { symbol, orderId });
+  await request("POST", "/api/v1/futures/trade/cancel_order", {}, { symbol, orderId });
 }
 
 export async function placePositionSlTp(params: {
