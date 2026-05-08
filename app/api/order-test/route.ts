@@ -56,20 +56,41 @@ export async function GET(req: Request) {
 
   const slPrice = "1000.00";
   const tpPrice = "5000.00";
-  const variants = [
+  // Tiny qty to test parameter validation without risking real execution
+  const qty = "0.001";
+
+  const orderVariants = [
+    { label: "tradeSide_OPEN", body: { symbol, side: "SELL", tradeSide: "OPEN", type: "MARKET", qty } },
+    { label: "positionSide_SHORT", body: { symbol, side: "SELL", positionSide: "SHORT", type: "MARKET", qty } },
+    { label: "minimal_no_extra", body: { symbol, side: "SELL", type: "MARKET", qty } },
+    { label: "tradeSide+marginMode", body: { symbol, side: "SELL", tradeSide: "OPEN", type: "MARKET", qty, marginMode: "ISOLATION" } },
+    { label: "positionSide+marginMode", body: { symbol, side: "SELL", positionSide: "SHORT", type: "MARKET", qty, marginMode: "ISOLATION" } },
+    { label: "tradeSide+leverage", body: { symbol, side: "SELL", tradeSide: "OPEN", type: "MARKET", qty, leverage: "5" } },
+  ];
+
+  const tpslVariants = [
     { endpoint: "/api/v1/futures/tpsl/position/place_order", body: { symbol, positionId, slPrice, slStopType: "MARK" } },
     { endpoint: "/api/v1/futures/tpsl/position/place_order", body: { symbol, positionId, slPrice, slStopType: "MARK", tpPrice, tpStopType: "MARK" } },
     { endpoint: "/api/v1/futures/tpsl/position/place_order", body: { symbol, positionId, slPrice, slStopType: "LAST_PRICE" } },
     { endpoint: "/api/v1/futures/tpsl/place_order", body: { symbol, positionId, slPrice, slStopType: "MARK", slOrderType: "MARKET" } },
-    { endpoint: "/api/v1/futures/tpsl/position/place_order", body: { symbol, slPrice, slStopType: "MARK" } },
   ];
 
+  if (mode === "order") {
+    const results = [];
+    for (const { label, body } of orderVariants) {
+      const result = await callBitunixPost("/api/v1/futures/order", body);
+      const r = result.raw as Record<string, unknown>;
+      results.push({ label, body, code: r?.code, msg: r?.msg, data: r?.data, httpStatus: result.httpStatus });
+    }
+    return NextResponse.json({ mode: "order", symbol, results });
+  }
+
   if (mode !== "real") {
-    return NextResponse.json({ mode: "dry", symbol, positionId, slPrice, tpPrice, variants });
+    return NextResponse.json({ mode: "dry", symbol, positionId, slPrice, tpPrice, orderVariants, tpslVariants });
   }
 
   const results = [];
-  for (const { endpoint, body } of variants) {
+  for (const { endpoint, body } of tpslVariants) {
     const result = await callBitunixPost(endpoint, body);
     const r = result.raw as Record<string, unknown>;
     results.push({ endpoint, body, code: r?.code, msg: r?.msg, httpStatus: result.httpStatus });
