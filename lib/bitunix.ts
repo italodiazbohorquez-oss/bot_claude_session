@@ -225,12 +225,11 @@ export async function getRawPosition(symbol: string): Promise<unknown> {
 export interface OrderParams {
   symbol: string;
   side: "BUY" | "SELL";
-  positionSide: "LONG" | "SHORT";
+  tradeSide: "OPEN" | "CLOSE";
   type: "MARKET" | "LIMIT" | "STOP_MARKET" | "TAKE_PROFIT_MARKET";
   quantity: number;
   price?: number;
   stopPrice?: number;
-  reduceOnly?: boolean;
   timeInForce?: "GTC" | "IOC" | "FOK";
 }
 
@@ -249,10 +248,9 @@ export async function placeOrder(params: OrderParams): Promise<string> {
   const body: Record<string, unknown> = {
     symbol: params.symbol,
     side: params.side,
-    positionSide: params.positionSide,
+    tradeSide: params.tradeSide,
     type: params.type,
     qty: params.quantity.toString(),
-    reduceOnly: params.reduceOnly ?? false,
   };
   if (params.price !== undefined) body.price = params.price.toString();
   if (params.stopPrice !== undefined) body.triggerPrice = params.stopPrice.toString();
