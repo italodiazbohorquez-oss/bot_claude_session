@@ -57,12 +57,16 @@ export async function GET(req: Request) {
   const slPrice = "1000.00";
   const tpPrice = "5000.00";
   const orderVariants = [
-    { label: "qty_0.001", body: { symbol, side: "SELL", tradeSide: "OPEN", type: "MARKET", qty: "0.001" } },
-    { label: "qty_1", body: { symbol, side: "SELL", tradeSide: "OPEN", type: "MARKET", qty: "1" } },
-    { label: "qty_10", body: { symbol, side: "SELL", tradeSide: "OPEN", type: "MARKET", qty: "10" } },
-    { label: "qty_100", body: { symbol, side: "SELL", tradeSide: "OPEN", type: "MARKET", qty: "100" } },
-    { label: "qty_1_positionSide", body: { symbol, side: "SELL", positionSide: "SHORT", type: "MARKET", qty: "1" } },
-    { label: "qty_1_minimal", body: { symbol, side: "SELL", type: "MARKET", qty: "1" } },
+    // Endpoint variants
+    { label: "endpoint_order", endpoint: "/api/v1/futures/order", body: { symbol, side: "SELL", tradeSide: "OPEN", type: "MARKET", qty: "1" } },
+    { label: "endpoint_trade_order", endpoint: "/api/v1/futures/trade/order", body: { symbol, side: "SELL", tradeSide: "OPEN", type: "MARKET", qty: "1" } },
+    { label: "endpoint_order_place", endpoint: "/api/v1/futures/order/place", body: { symbol, side: "SELL", tradeSide: "OPEN", type: "MARKET", qty: "1" } },
+    // Lowercase values
+    { label: "lowercase_side_type", endpoint: "/api/v1/futures/order", body: { symbol, side: "sell", tradeSide: "open", type: "market", qty: "1" } },
+    // BUY instead of SELL
+    { label: "buy_side", endpoint: "/api/v1/futures/order", body: { symbol, side: "BUY", tradeSide: "OPEN", type: "MARKET", qty: "1" } },
+    // orderType instead of type
+    { label: "orderType_field", endpoint: "/api/v1/futures/order", body: { symbol, side: "SELL", tradeSide: "OPEN", orderType: "MARKET", qty: "1" } },
   ];
 
   const tpslVariants = [
@@ -74,10 +78,10 @@ export async function GET(req: Request) {
 
   if (mode === "order") {
     const results = [];
-    for (const { label, body } of orderVariants) {
-      const result = await callBitunixPost("/api/v1/futures/order", body);
+    for (const { label, endpoint: ep, body } of orderVariants as { label: string; endpoint: string; body: Record<string, unknown> }[]) {
+      const result = await callBitunixPost(ep, body);
       const r = result.raw as Record<string, unknown>;
-      results.push({ label, body, code: r?.code, msg: r?.msg, data: r?.data, httpStatus: result.httpStatus });
+      results.push({ label, endpoint: ep, body, code: r?.code, msg: r?.msg, data: r?.data, httpStatus: result.httpStatus });
     }
     return NextResponse.json({ mode: "order", symbol, results });
   }
