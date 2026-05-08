@@ -59,17 +59,18 @@ export async function GET(req: Request) {
   // All on /api/v1/futures/order (auth passes there → isolate the bad field)
   const EP = "/api/v1/futures/order";
   const orderVariants = [
-    // positionSide instead of tradeSide
-    { label: "positionSide_LONG",   endpoint: EP, body: { symbol, side: "BUY",  positionSide: "LONG",  orderType: "MARKET", qty: "0.01" } },
-    { label: "positionSide_SHORT",  endpoint: EP, body: { symbol, side: "SELL", positionSide: "SHORT", orderType: "MARKET", qty: "0.01" } },
-    // No tradeSide/positionSide at all
-    { label: "no_side_field",       endpoint: EP, body: { symbol, side: "BUY",  orderType: "MARKET", qty: "0.01" } },
-    // qty as number
-    { label: "qty_number",          endpoint: EP, body: { symbol, side: "BUY",  tradeSide: "OPEN", orderType: "MARKET", qty: 0.01 } },
-    // tradeSide OPEN + type (not orderType)
-    { label: "type_not_orderType",  endpoint: EP, body: { symbol, side: "BUY",  tradeSide: "OPEN", type: "MARKET", qty: "0.01" } },
-    // reduceOnly false
-    { label: "reduceOnly_false",    endpoint: EP, body: { symbol, side: "BUY",  tradeSide: "OPEN", orderType: "MARKET", qty: "0.01", reduceOnly: false } },
+    // size instead of qty (positions use "size" field)
+    { label: "size_field",          endpoint: EP, body: { symbol, side: "BUY", tradeSide: "OPEN", orderType: "MARKET", size: "0.01" } },
+    // With marginCoin (required in account calls)
+    { label: "with_marginCoin",     endpoint: EP, body: { symbol, side: "BUY", tradeSide: "OPEN", orderType: "MARKET", qty: "0.01", marginCoin: "USDT" } },
+    // size + marginCoin
+    { label: "size_marginCoin",     endpoint: EP, body: { symbol, side: "BUY", tradeSide: "OPEN", orderType: "MARKET", size: "0.01", marginCoin: "USDT" } },
+    // All lowercase values
+    { label: "all_lowercase",       endpoint: EP, body: { symbol, side: "buy", tradeSide: "open", orderType: "market", size: "0.01" } },
+    // amount field name
+    { label: "amount_field",        endpoint: EP, body: { symbol, side: "BUY", tradeSide: "OPEN", orderType: "MARKET", amount: "0.01" } },
+    // qty larger value
+    { label: "qty_larger",          endpoint: EP, body: { symbol, side: "BUY", tradeSide: "OPEN", orderType: "MARKET", qty: "1" } },
   ];
 
   const tpslVariants = [
