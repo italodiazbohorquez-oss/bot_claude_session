@@ -42,7 +42,7 @@ async function request<T>(
   const apiKey = (process.env.BITUNIX_API_KEY ?? "").trim();
   const apiSecret = (process.env.BITUNIX_API_SECRET ?? "").trim();
   const timestamp = Date.now().toString();
-  const nonce = crypto.randomBytes(8).toString("hex");
+  const nonce = crypto.randomBytes(16).toString("hex");
 
   let url = `${BASE_URL}${path}`;
   let headers: Record<string, string> = { "Content-Type": "application/json", "language": "en-US" };

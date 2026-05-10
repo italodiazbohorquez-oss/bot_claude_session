@@ -11,7 +11,7 @@ async function callBitunixPost(
   const apiKey = (process.env.BITUNIX_API_KEY ?? "").trim();
   const apiSecret = (process.env.BITUNIX_API_SECRET ?? "").trim();
   const timestamp = Date.now().toString();
-  const nonce = crypto.randomBytes(8).toString("hex");
+  const nonce = crypto.randomBytes(16).toString("hex");
   const bodyStr = JSON.stringify(body);
   const digest = crypto.createHash("sha256").update(nonce + timestamp + apiKey + "" + bodyStr).digest("hex");
   const signature = crypto.createHash("sha256").update(digest + apiSecret).digest("hex");
@@ -56,21 +56,20 @@ export async function GET(req: Request) {
 
   const slPrice = "1000.00";
   const tpPrice = "5000.00";
-  // All on /api/v1/futures/order (auth passes there → isolate the bad field)
-  const EP = "/api/v1/futures/order";
+  // Correct endpoint per official docs — test with 32-char nonce (was 16)
+  const CORRECT_EP = "/api/v1/futures/trade/place_order";
+  const OLD_EP = "/api/v1/futures/order";
   const orderVariants = [
-    // size instead of qty (positions use "size" field)
-    { label: "size_field",          endpoint: EP, body: { symbol, side: "BUY", tradeSide: "OPEN", orderType: "MARKET", size: "0.01" } },
-    // With marginCoin (required in account calls)
-    { label: "with_marginCoin",     endpoint: EP, body: { symbol, side: "BUY", tradeSide: "OPEN", orderType: "MARKET", qty: "0.01", marginCoin: "USDT" } },
-    // size + marginCoin
-    { label: "size_marginCoin",     endpoint: EP, body: { symbol, side: "BUY", tradeSide: "OPEN", orderType: "MARKET", size: "0.01", marginCoin: "USDT" } },
-    // All lowercase values
-    { label: "all_lowercase",       endpoint: EP, body: { symbol, side: "buy", tradeSide: "open", orderType: "market", size: "0.01" } },
-    // amount field name
-    { label: "amount_field",        endpoint: EP, body: { symbol, side: "BUY", tradeSide: "OPEN", orderType: "MARKET", amount: "0.01" } },
-    // qty larger value
-    { label: "qty_larger",          endpoint: EP, body: { symbol, side: "BUY", tradeSide: "OPEN", orderType: "MARKET", qty: "1" } },
+    // Exact minimal body from official docs
+    { label: "new_ep_minimal",      endpoint: CORRECT_EP, body: { symbol, side: "BUY", qty: "0.01", orderType: "MARKET", tradeSide: "OPEN" } },
+    // With effect
+    { label: "new_ep_with_effect",  endpoint: CORRECT_EP, body: { symbol, side: "BUY", qty: "0.01", orderType: "MARKET", tradeSide: "OPEN", effect: "GTC" } },
+    // SELL
+    { label: "new_ep_sell",         endpoint: CORRECT_EP, body: { symbol, side: "SELL", qty: "0.01", orderType: "MARKET", tradeSide: "OPEN" } },
+    // Old endpoint minimal (for comparison — auth should still pass)
+    { label: "old_ep_minimal",      endpoint: OLD_EP, body: { symbol, side: "BUY", qty: "0.01", orderType: "MARKET", tradeSide: "OPEN" } },
+    // Old endpoint with effect
+    { label: "old_ep_with_effect",  endpoint: OLD_EP, body: { symbol, side: "BUY", qty: "0.01", orderType: "MARKET", tradeSide: "OPEN", effect: "GTC" } },
   ];
 
   const tpslVariants = [
