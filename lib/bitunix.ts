@@ -42,7 +42,7 @@ async function request<T>(
   const apiKey = (process.env.BITUNIX_API_KEY ?? "").trim();
   const apiSecret = (process.env.BITUNIX_API_SECRET ?? "").trim();
   const timestamp = Date.now().toString();
-  const nonce = crypto.randomBytes(8).toString("hex");
+  const nonce = crypto.randomBytes(16).toString("hex");
 
   let url = `${BASE_URL}${path}`;
   let headers: Record<string, string> = { "Content-Type": "application/json", "language": "en-US" };
@@ -225,13 +225,10 @@ export async function getRawPosition(symbol: string): Promise<unknown> {
 export interface OrderParams {
   symbol: string;
   side: "BUY" | "SELL";
-  positionSide: "LONG" | "SHORT";
-  type: "MARKET" | "LIMIT" | "STOP_MARKET" | "TAKE_PROFIT_MARKET";
+  tradeSide: "OPEN" | "CLOSE";
+  orderType: "MARKET" | "LIMIT";
   quantity: number;
   price?: number;
-  stopPrice?: number;
-  reduceOnly?: boolean;
-  timeInForce?: "GTC" | "IOC" | "FOK";
 }
 
 interface RawOrder {
@@ -249,16 +246,14 @@ export async function placeOrder(params: OrderParams): Promise<string> {
   const body: Record<string, unknown> = {
     symbol: params.symbol,
     side: params.side,
-    positionSide: params.positionSide,
-    type: params.type,
+    tradeSide: params.tradeSide,
+    orderType: params.orderType,
     qty: params.quantity.toString(),
-    reduceOnly: params.reduceOnly ?? false,
+    effect: "GTC",
   };
   if (params.price !== undefined) body.price = params.price.toString();
-  if (params.stopPrice !== undefined) body.triggerPrice = params.stopPrice.toString();
-  if (params.timeInForce) body.timeInForce = params.timeInForce;
 
-  const data = await request<RawOrder>("POST", "/api/v1/futures/order", {}, body);
+  const data = await request<RawOrder>("POST", "/api/v1/futures/trade/place_order", {}, body);
   return data.orderId;
 }
 
@@ -267,7 +262,7 @@ export async function cancelOrder(symbol: string, orderId: string): Promise<void
     console.log("[TESTNET] Would cancel order:", orderId);
     return;
   }
-  await request("POST", "/api/v1/futures/order/cancel", {}, { symbol, orderId });
+  await request("POST", "/api/v1/futures/trade/cancel_order", {}, { symbol, orderId });
 }
 
 export async function placePositionSlTp(params: {

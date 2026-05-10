@@ -151,10 +151,9 @@ export async function runBotForSymbol(symbol: string): Promise<BotRunResult> {
         await placeOrder({
           symbol,
           side: posLong ? "SELL" : "BUY",
-          positionSide: openPosition.side,
-          type: "MARKET",
+          tradeSide: "CLOSE",
+          orderType: "MARKET",
           quantity: openPosition.size,
-          reduceOnly: true,
         });
         const openTrade = await getOpenTrade(symbol);
         if (openTrade?.id) {
@@ -338,6 +337,23 @@ export async function runBotForSymbol(symbol: string): Promise<BotRunResult> {
     const setupSide: "LONG" | "SHORT" = effectiveScoreLong >= effectiveScoreShort ? "LONG" : "SHORT";
     const h1h4Aligned = (sqz1h.sqzVal > 0 && sqz4h.sqzVal > 0) || (sqz1h.sqzVal < 0 && sqz4h.sqzVal < 0);
 
+    // Calcular precio actual y TP/SL aproximados para las alertas previas a entrada
+    const alertCandle  = candles15m[candles15m.length - 1];
+    const alertPrevCandle = candles15m[candles15m.length - 2];
+    const alertRrDynamic = calcRrDynamic({ capital, riskPerTrade, rrRatio, atrMult, leverage }, cerebro.rrFactors);
+    const { sl: alertSl, tp: alertTp } = calcSlTp({
+      side: setupSide,
+      close:    alertCandle.close,
+      high:     alertCandle.high,
+      low:      alertCandle.low,
+      prevHigh: alertPrevCandle.high,
+      prevLow:  alertPrevCandle.low,
+      atr7:     cerebro.atr7,
+      atr50:    cerebro.atr50,
+      atrMult,
+      rrDynamic: alertRrDynamic,
+    });
+
     // Alerta SETUP FORMANDO: 1H+4H alineados, score ≥ 3 pero sin llegar al gatillo
     // Throttle: 1 vez cada 90 minutos por símbolo
     if (h1h4Aligned && bestScore >= 3 && bestScore < minScore) {
@@ -354,6 +370,8 @@ export async function runBotForSymbol(symbol: string): Promise<BotRunResult> {
           sqzOff: sqz15m.sqzOff, sqzOn: sqz15m.sqzOn,
           adxStrength, adxValue: sqz15m.adxValue,
           minScore,
+          currentPrice: alertCandle.close,
+          sl: alertSl, tp: alertTp,
         })).catch(() => {});
       }
     }
@@ -376,6 +394,9 @@ export async function runBotForSymbol(symbol: string): Promise<BotRunResult> {
           sqzOn: sqz15m.sqzOn,
           adxStrength,
           minScore,
+          currentPrice: alertCandle.close,
+          sl: alertSl, tp: alertTp,
+          tf15m: mtf.tf15m, tf1h: mtf.tf1h, tf4h: mtf.tf4h,
         })).catch(() => {});
       }
     }
@@ -438,8 +459,8 @@ export async function runBotForSymbol(symbol: string): Promise<BotRunResult> {
 
   try {
     orderId = await placeOrder({
-      symbol, side: orderSide, positionSide: side,
-      type: "MARKET", quantity: posResult.contracts,
+      symbol, side: orderSide, tradeSide: "OPEN",
+      orderType: "MARKET", quantity: posResult.contracts,
     });
   } catch (e) {
     const errMsg = String(e).slice(0, 150);

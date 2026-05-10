@@ -75,6 +75,12 @@ export async function GET(req: Request) {
   } else if (forceMode === "setup") {
     // Send setup alert instead
     const bestSide: "LONG" | "SHORT" = effL >= effS ? "LONG" : "SHORT";
+    const setupRrDynamic = calcRrDynamic({ capital, riskPerTrade, rrRatio, atrMult, leverage }, cerebro.rrFactors);
+    const { sl: setupSl, tp: setupTp } = calcSlTp({
+      side: bestSide, close: curCandle.close, high: curCandle.high, low: curCandle.low,
+      prevHigh: prevCandle.high, prevLow: prevCandle.low,
+      atr7: cerebro.atr7, atr50: cerebro.atr50, atrMult, rrDynamic: setupRrDynamic,
+    });
     const msg = buildSetupMsg({
       symbol, side: bestSide,
       scoreLong: effL, scoreShort: effS,
@@ -83,6 +89,7 @@ export async function GET(req: Request) {
       sqzOff: sqz15m.sqzOff, sqzOn: sqz15m.sqzOn,
       adxStrength: sqz15m.adxStrength, adxValue: sqz15m.adxValue,
       minScore,
+      currentPrice: curCandle.close, sl: setupSl, tp: setupTp,
     });
     await notify(msg);
     return NextResponse.json({
