@@ -692,96 +692,120 @@ function RecentTradesPanel({ trades }: { trades: Trade[] }) {
   );
 }
 
-// ── Cerebro Panel (best symbol) ───────────────────────────────────
-function CerebroPanel({ symbols, latestSignals }: { symbols: string[]; latestSignals: Record<string, SignalLog> }) {
-  // Pick symbol with best effective score
-  let bestSym = symbols[0] ?? "—";
-  let bestScore = 0;
-  let bestSide: "LONG" | "SHORT" = "LONG";
-  for (const sym of symbols) {
-    const sig = latestSignals[sym];
-    if (!sig) continue;
-    if (sig.score_long > bestScore) { bestScore = sig.score_long; bestSym = sym; bestSide = "LONG"; }
-    if (sig.score_short > bestScore) { bestScore = sig.score_short; bestSym = sym; bestSide = "SHORT"; }
+// ── Market Sentiment Panel ────────────────────────────────────────
+function MarketSentimentPanel({ symbols, latestSignals }: { symbols: string[]; latestSignals: Record<string, SignalLog> }) {
+  const withData = symbols.filter(s => latestSignals[s]);
+  const total = withData.length;
+
+  let sumLong = 0, sumShort = 0;
+  let bullCount = 0, bearCount = 0;
+  const topLong: { sym: string; score: number }[] = [];
+  const topShort: { sym: string; score: number }[] = [];
+  let bull4hCount = 0, bear4hCount = 0;
+
+  for (const sym of withData) {
+    const sig = latestSignals[sym]!;
+    sumLong += sig.score_long;
+    sumShort += sig.score_short;
+    if (sig.score_long > sig.score_short) bullCount++;
+    else if (sig.score_short > sig.score_long) bearCount++;
+    topLong.push({ sym, score: sig.score_long });
+    topShort.push({ sym, score: sig.score_short });
+    const mtf = parseMtf(sig.mtf_setup);
+    if (mtf.tf4h === "BULL") bull4hCount++;
+    else if (mtf.tf4h === "BEAR") bear4hCount++;
   }
-  const sig = latestSignals[bestSym];
 
-  const scoreL = sig?.score_long ?? 0;
-  const scoreS = sig?.score_short ?? 0;
-  const points = [
-    { id: "P1", label: "MTF aligned" },
-    { id: "P2", label: "Sqz compress" },
-    { id: "P3", label: "Squeeze off" },
-    { id: "P4", label: "ADX > 25" },
-    { id: "P5", label: "15M momentum" },
-    { id: "P6", label: "VWAP side" },
-    { id: "P7", label: "Delta Z-score" },
-    { id: "P8", label: "CVD trend" },
-    { id: "P9", label: "SFP / wick" },
-  ].map((p, idx) => ({
-    ...p,
-    on: bestSide === "LONG" ? idx < scoreL : idx < scoreS,
-  }));
+  const avgLong = total > 0 ? sumLong / total : 0;
+  const avgShort = total > 0 ? sumShort / total : 0;
+  const bullPct = total > 0 ? Math.round((bullCount / total) * 100) : 0;
+  const bearPct = total > 0 ? Math.round((bearCount / total) * 100) : 0;
+  const neutralPct = 100 - bullPct - bearPct;
 
-  const mtf = sig ? parseMtf(sig.mtf_setup) : null;
+  const bias = avgLong > avgShort ? "LONG" : avgShort > avgLong ? "SHORT" : "NEUTRAL";
+  const biasColor = bias === "LONG" ? "var(--bull)" : bias === "SHORT" ? "var(--bear)" : "var(--t-300)";
+  const biasLabel = bias === "LONG" ? "ALCISTA" : bias === "SHORT" ? "BAJISTA" : "NEUTRAL";
+  const biasIcon = bias === "LONG" ? "▲" : bias === "SHORT" ? "▼" : "—";
+
+  // Sentiment bar: bullPct = green, bearPct = red, rest neutral
+  const barLong = bullPct;
+  const barShort = bearPct;
+
+  // Top 3 strongest signals (either direction)
+  const allTop = [
+    ...topLong.map(t => ({ sym: t.sym, score: t.score, side: "LONG" as const })),
+    ...topShort.map(t => ({ sym: t.sym, score: t.score, side: "SHORT" as const })),
+  ].sort((a, b) => b.score - a.score).filter(t => t.score > 0).slice(0, 3);
+
+  const avgRounded = (n: number) => Math.round(n * 10) / 10;
 
   return (
     <div className="glass col" style={{ padding: 22, gap: 16 }}>
+      {/* Header */}
       <div className="row between">
         <div className="col" style={{ gap: 3 }}>
-          <span className="t-eyebrow">CEREBRO IA · {bestSym} · {bestSide}</span>
+          <span className="t-eyebrow">CEREBRO IA · SENTIMIENTO DE MERCADO</span>
           <h3 className="t-display" style={{ fontSize: 17 }}>
-            Score <span style={{ color: bestSide === "LONG" ? "var(--bull)" : "var(--bear)" }}>{bestScore}/9</span>
+            Sesgo <span style={{ color: biasColor }}>{biasIcon} {biasLabel}</span>
           </h3>
         </div>
         <div className="row" style={{ gap: 10, alignItems: "center" }}>
-          <ScoreRing value={scoreL} max={9} color="var(--bull)" size={52} label="LONG"/>
-          <ScoreRing value={scoreS} max={9} color="var(--bear)" size={52} label="SHORT"/>
+          <ScoreRing value={avgRounded(avgLong)} max={9} color="var(--bull)" size={52} label="LONG"/>
+          <ScoreRing value={avgRounded(avgShort)} max={9} color="var(--bear)" size={52} label="SHORT"/>
         </div>
       </div>
 
-      {/* 9-point grid */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(9, 1fr)", gap: 6 }}>
-        {points.map(p => (
-          <div key={p.id} className="col" style={{
-            alignItems: "center",
-            padding: "8px 4px",
-            borderRadius: 8,
-            gap: 4,
-            background: p.on ? "rgba(0,255,157,0.06)" : "rgba(255,255,255,0.02)",
-            border: `1px solid ${p.on ? "rgba(0,255,157,0.25)" : "var(--hairline)"}`,
-            boxShadow: p.on ? "0 0 12px rgba(0,255,157,0.1)" : "none",
-            position: "relative",
+      {/* Sentiment bar */}
+      <div className="col" style={{ gap: 6 }}>
+        <div className="row between">
+          <span className="t-eyebrow">ALCISTAS {bullCount} · {bullPct}%</span>
+          <span className="t-eyebrow">{total} activos</span>
+          <span className="t-eyebrow">BAJISTAS {bearCount} · {bearPct}%</span>
+        </div>
+        <div style={{ height: 10, borderRadius: 5, overflow: "hidden", background: "rgba(255,255,255,0.05)", display: "flex" }}>
+          <div style={{ width: `${barLong}%`, background: "var(--bull)", transition: "width 0.6s", boxShadow: "0 0 8px rgba(0,255,157,0.4)" }}/>
+          <div style={{ width: `${neutralPct}%`, background: "rgba(255,255,255,0.08)" }}/>
+          <div style={{ width: `${barShort}%`, background: "var(--bear)", boxShadow: "0 0 8px rgba(255,80,80,0.4)" }}/>
+        </div>
+      </div>
+
+      {/* Avg scores row */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8 }}>
+        {[
+          { label: "Avg LONG", value: avgRounded(avgLong), color: "var(--bull)" },
+          { label: "Avg SHORT", value: avgRounded(avgShort), color: "var(--bear)" },
+          { label: "4H Bull", value: bull4hCount, color: "var(--bull)", suffix: `/${total}` },
+          { label: "4H Bear", value: bear4hCount, color: "var(--bear)", suffix: `/${total}` },
+        ].map(({ label, value, color, suffix }) => (
+          <div key={label} className="col" style={{
+            alignItems: "center", padding: "8px 6px", borderRadius: 8, gap: 3,
+            background: "rgba(255,255,255,0.02)", border: "1px solid var(--hairline)",
           }}>
-            <span className="t-mono" style={{ fontSize: 13, fontWeight: 700, color: p.on ? "var(--bull)" : "var(--t-400)" }}>{p.id}</span>
-            <span style={{ fontSize: 8, color: "var(--t-300)", textAlign: "center", lineHeight: 1.2 }}>{p.label}</span>
-            {p.on && <div style={{ position: "absolute", top: 5, right: 5, width: 4, height: 4, borderRadius: "50%", background: "var(--bull)", boxShadow: "0 0 6px var(--bull)" }}/>}
+            <span className="t-eyebrow" style={{ fontSize: 8 }}>{label}</span>
+            <span className="t-mono" style={{ fontSize: 15, fontWeight: 700, color }}>
+              {value}{suffix ?? ""}
+            </span>
           </div>
         ))}
       </div>
 
-      {/* MTF summary */}
-      {mtf && (
-        <div className="row between" style={{ paddingTop: 10, borderTop: "1px solid var(--hairline)" }}>
-          <div className="row" style={{ gap: 14 }}>
-            <div className="col" style={{ gap: 3 }}>
-              <span className="t-eyebrow">ADX</span>
-              <span className="t-mono" style={{ fontSize: 12 }}>{sig ? fmt(sig.adx_value, 1) : "—"} <AdxLabel str={sig?.adx_strength ?? "WEAK"}/></span>
-            </div>
-            <div className="col" style={{ gap: 3 }}>
-              <span className="t-eyebrow">MTF setup</span>
-              <SetupColor setup={mtf.setup}/>
-            </div>
-            <div className="col" style={{ gap: 3 }}>
-              <span className="t-eyebrow">Anti-trap</span>
-              <span className="t-mono" style={{ fontSize: 12, color: "var(--bull)" }}>CHECK</span>
-            </div>
-          </div>
-          <div className="row" style={{ gap: 4 }}>
-            <MtfCell dir={mtf.tf5m}/>
-            <MtfCell dir={mtf.tf15m}/>
-            <MtfCell dir={mtf.tf1h}/>
-            <MtfCell dir={mtf.tf4h}/>
+      {/* Top signals */}
+      {allTop.length > 0 && (
+        <div className="col" style={{ gap: 6, paddingTop: 10, borderTop: "1px solid var(--hairline)" }}>
+          <span className="t-eyebrow">SEÑALES MÁS FUERTES</span>
+          <div className="row" style={{ gap: 8 }}>
+            {allTop.map(({ sym, score, side }) => (
+              <div key={`${sym}-${side}`} className="row" style={{
+                gap: 6, padding: "5px 10px", borderRadius: 6, alignItems: "center",
+                background: side === "LONG" ? "rgba(0,255,157,0.06)" : "rgba(255,80,80,0.06)",
+                border: `1px solid ${side === "LONG" ? "rgba(0,255,157,0.2)" : "rgba(255,80,80,0.2)"}`,
+              }}>
+                <span className="t-mono" style={{ fontSize: 11, fontWeight: 700, color: side === "LONG" ? "var(--bull)" : "var(--bear)" }}>
+                  {side === "LONG" ? "▲" : "▼"} {sym.replace("USDT", "")}
+                </span>
+                <span className="t-mono" style={{ fontSize: 11, color: "var(--t-300)" }}>{score}/9</span>
+              </div>
+            ))}
           </div>
         </div>
       )}
@@ -910,7 +934,7 @@ export default function Dashboard() {
         return (
           <div style={{ display: "grid", gridTemplateColumns: "380px 1fr", gap: 18, alignItems: "start" }}>
             <RiskConfigPanel config={config} onSave={saveConfig} saving={saving} saveMsg={saveMsg}/>
-            <CerebroPanel symbols={symbols} latestSignals={latestSignals}/>
+            <MarketSentimentPanel symbols={symbols} latestSignals={latestSignals}/>
           </div>
         );
       case "log":
@@ -927,7 +951,7 @@ export default function Dashboard() {
             <AccountRibbon account={account} recentTrades={recentTrades}/>
             <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr", gap: 18 }}>
               <PositionsPanel positions={positions}/>
-              <CerebroPanel symbols={symbols} latestSignals={latestSignals}/>
+              <MarketSentimentPanel symbols={symbols} latestSignals={latestSignals}/>
             </div>
             <SymbolsTable symbols={symbols} latestSignals={latestSignals} prices={prices} positions={positions}/>
             <div style={{ display: "grid", gridTemplateColumns: "300px 1fr", gap: 18 }}>
