@@ -382,9 +382,9 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
       }
     }
 
-    // Alerta COMPRESIÓN: sqzOff activo + score cercano al gatillo
-    // Throttle: 1 vez cada 3 horas por símbolo
-    if (sqz15m.sqzOff && bestScore >= minScore - 1) {
+    // Alerta COMPRESIÓN: HIGH squeeze activo (sqzOn) — precio coil, explosión inminente
+    // Se envía ANTES de que explote, no después. Throttle: 1 vez cada 3 horas por símbolo
+    if (sqz15m.highSqz && sqz15m.sqzOn) {
       const throttleKey = `notify_sqz_${symbol}`;
       const lastNotifyTs = await getBotConfig(throttleKey);
       const threeHoursAgo = Date.now() - 3 * 60 * 60 * 1000;

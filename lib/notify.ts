@@ -161,18 +161,18 @@ export function buildCompressionMsg(ctx: CompressionCtx): string {
   const arrow15m = tf15m === "BULL" ? "▲" : tf15m === "BEAR" ? "▼" : "—";
   const arrow1h  = tf1h  === "BULL" ? "▲" : tf1h  === "BEAR" ? "▼" : "—";
   const arrow4h  = tf4h  === "BULL" ? "▲" : tf4h  === "BEAR" ? "▼" : "—";
-  return `⚡ <b>NEXUS IA · COMPRESIÓN + SQUEEZE</b>
+  return `🗜️ <b>NEXUS IA · ALTA COMPRESIÓN · SQUEEZE ON</b>
 ━━━━━━━━━━━━━━━━━━
 📊 <b>${symbol}</b>
-🔥 ${sqzLabel(highSqz, midSqz, sqzOff, sqzOn)}
+🔴 HIGH Squeeze ON — mercado coil, explosión inminente
 🕐 15M ${arrow15m}  ·  1H ${arrow1h}  ·  4H ${arrow4h}
 📈 LONG: <b>${scoreLong}/9</b>  |  SHORT: <b>${scoreShort}/9</b>
-🎯 Mejor score: <b>${bestScore}/9 ${dir}</b>  (gatillo: ${minScore})
+🎯 Sesgo probable: <b>${bestScore}/9 ${dir}</b>
 💵 Precio actual: <code>$${fmtPrice(currentPrice)}</code>
 🛑 SL aprox:     <code>$${fmtPrice(sl)}</code>  (-${diffPct(currentPrice, sl)}%)
 🎯 TP aprox:     <code>$${fmtPrice(tp)}</code>  (+${diffPct(currentPrice, tp)}%)
 💪 ADX: ${adxStrength}
-⏳ Precio expandiendo — esperando confirmación...
+⏰ Preparar — esperar triángulo dorado en 15M para entrar
 🕑 ${localTime()} (Lima)`;
 }
 
