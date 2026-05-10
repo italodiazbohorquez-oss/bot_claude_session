@@ -982,7 +982,7 @@ export default function Dashboard() {
         />
 
         <div className="col" style={{ padding: "22px 26px", gap: 18 }}>
-          <SectionContent/>
+          {SectionContent()}
         </div>
 
         <div style={{ textAlign: "center", color: "var(--t-500)", fontSize: 10, padding: "12px 0 20px", fontFamily: "var(--font-mono)" }}>
