@@ -60,16 +60,15 @@ export async function GET(req: Request) {
   const CORRECT_EP = "/api/v1/futures/trade/place_order";
   const OLD_EP = "/api/v1/futures/order";
   const orderVariants = [
-    // Exact minimal body from official docs
+    // Old endpoint — auth passes, test various qty/symbol combos
+    { label: "old_BTCUSDT",         endpoint: OLD_EP, body: { symbol: "BTCUSDT", side: "BUY", qty: "0.001", orderType: "MARKET", tradeSide: "OPEN" } },
+    { label: "old_BNBUSDT_0.1",     endpoint: OLD_EP, body: { symbol, side: "BUY", qty: "0.1",  orderType: "MARKET", tradeSide: "OPEN" } },
+    { label: "old_with_leverage",   endpoint: OLD_EP, body: { symbol, side: "BUY", qty: "0.01", orderType: "MARKET", tradeSide: "OPEN", leverage: "5" } },
+    { label: "old_pos_trade_side",  endpoint: OLD_EP, body: { symbol, side: "BUY", qty: "0.01", orderType: "MARKET", tradeSide: "OPEN", positionSide: "LONG" } },
+    // New endpoint — auth fails; try leverage endpoint (same namespace as old) for comparison
     { label: "new_ep_minimal",      endpoint: CORRECT_EP, body: { symbol, side: "BUY", qty: "0.01", orderType: "MARKET", tradeSide: "OPEN" } },
-    // With effect
-    { label: "new_ep_with_effect",  endpoint: CORRECT_EP, body: { symbol, side: "BUY", qty: "0.01", orderType: "MARKET", tradeSide: "OPEN", effect: "GTC" } },
-    // SELL
-    { label: "new_ep_sell",         endpoint: CORRECT_EP, body: { symbol, side: "SELL", qty: "0.01", orderType: "MARKET", tradeSide: "OPEN" } },
-    // Old endpoint minimal (for comparison — auth should still pass)
-    { label: "old_ep_minimal",      endpoint: OLD_EP, body: { symbol, side: "BUY", qty: "0.01", orderType: "MARKET", tradeSide: "OPEN" } },
-    // Old endpoint with effect
-    { label: "old_ep_with_effect",  endpoint: OLD_EP, body: { symbol, side: "BUY", qty: "0.01", orderType: "MARKET", tradeSide: "OPEN", effect: "GTC" } },
+    // Leverage endpoint (POST but simpler — should auth same as old)
+    { label: "set_leverage",        endpoint: "/api/v1/futures/leverage", body: { symbol, leverage: "5" } },
   ];
 
   const tpslVariants = [
@@ -80,13 +79,14 @@ export async function GET(req: Request) {
   ];
 
   if (mode === "order") {
+    const apiKeyHint = (process.env.BITUNIX_API_KEY ?? "").trim().slice(0, 6) + "...";
     const results = [];
     for (const { label, endpoint: ep, body } of orderVariants as { label: string; endpoint: string; body: Record<string, unknown> }[]) {
       const result = await callBitunixPost(ep, body);
       const r = result.raw as Record<string, unknown>;
       results.push({ label, endpoint: ep, body, code: r?.code, msg: r?.msg, data: r?.data, httpStatus: result.httpStatus });
     }
-    return NextResponse.json({ mode: "order", symbol, results });
+    return NextResponse.json({ mode: "order", symbol, apiKeyHint, results });
   }
 
   if (mode !== "real") {
