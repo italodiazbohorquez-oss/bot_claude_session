@@ -15,12 +15,35 @@ export async function GET(_req: NextRequest) {
   const startTime = Date.now();
   const results: BotRunResult[] = [];
 
-  // 1. Verificar si ya hay una posición abierta
+  // 1. Verificar estado del bot y posiciones abiertas
+  const { getBotConfig } = await import("@/lib/supabase");
+  const botEnabled = await getBotConfig("bot_enabled").catch(() => "true");
+  const tradingEnabled = botEnabled !== "false";
+
   let openPositions: Awaited<ReturnType<typeof getAllPositions>> = [];
   try {
     openPositions = await getAllPositions();
   } catch (e) {
     console.error("[NEXUS] getAllPositions error:", e);
+  }
+
+  // Bot deshabilitado: escanear todos los símbolos para alertas (no abre posiciones)
+  if (!tradingEnabled) {
+    console.log("[NEXUS] Bot pausado — escaneando señales para alertas");
+    const BATCH_SIZE = 4;
+    for (let i = 0; i < symbols.length; i += BATCH_SIZE) {
+      if (Date.now() - startTime > 50000) break;
+      const batch = symbols.slice(i, i + BATCH_SIZE);
+      const batchResults = await Promise.allSettled(batch.map(s => runBotForSymbol(s)));
+      for (let j = 0; j < batch.length; j++) {
+        const r = batchResults[j];
+        if (r.status === "fulfilled") {
+          results.push(r.value);
+          console.log(`[NEXUS] ${batch[j]}: ${r.value.action}`);
+        }
+      }
+    }
+    return NextResponse.json({ ok: true, duration: Date.now() - startTime, tradingEnabled: false, results });
   }
 
   if (openPositions.length > 0) {

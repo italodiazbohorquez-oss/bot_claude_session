@@ -31,13 +31,9 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
   const ts = new Date().toISOString();
   const result: BotRunResult = { symbol, action: "NONE", details: {}, timestamp: ts };
 
-  // 0. Kill switch — si bot_enabled = "false", no operar
+  // 0. Kill switch — bloquea solo apertura de nuevas posiciones, no alertas ni cierre
   const botEnabled = await getBotConfig("bot_enabled");
-  if (botEnabled === "false") {
-    result.action = "BOT_DISABLED";
-    result.details = { reason: "Kill switch activo — reactivar desde el dashboard" };
-    return result;
-  }
+  const tradingEnabled = botEnabled !== "false";
 
   // 1. Verificar sesión
   const session = getCurrentSession();
@@ -467,6 +463,14 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
   }
 
   // 7. Ejecutar orden de mercado
+  // Si kill switch activo: señal detectada pero no abrir posición
+  if (!tradingEnabled) {
+    result.action = "BOT_DISABLED";
+    result.details = { side, entryScore, setupType, sl, tp, close: curCandle.close };
+    notify(`⏸️ <b>NEXUS IA · SEÑAL LISTA (bot pausado)</b>\n━━━━━━━━━━━━━━━━━━\n📊 <b>${symbol}</b> ${side} · Score ${entryScore}/9\n💵 Entry: <code>$${curCandle.close}</code>\n🛑 SL: <code>$${sl.toFixed(2)}</code>  🎯 TP: <code>$${tp.toFixed(2)}</code>\n⏸️ Reactiva el bot para operar`).catch(() => {});
+    return result;
+  }
+
   let orderId = "";
   const orderSide = side === "LONG" ? "BUY" : "SELL";
   const closeSide = side === "LONG" ? "SELL" : "BUY";
