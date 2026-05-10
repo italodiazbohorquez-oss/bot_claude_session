@@ -189,5 +189,5 @@ export async function sendWhatsApp(message: string): Promise<void> {
 }
 
 export async function notify(message: string): Promise<void> {
-  await Promise.allSettled([sendTelegram(message), sendWhatsApp(message)]);
+  await sendTelegram(message);
 }

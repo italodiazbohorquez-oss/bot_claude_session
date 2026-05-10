@@ -1,9 +1,9 @@
-import { getCandles, getPosition, placeOrder, placePositionSlTp, type Position } from "./bitunix";
+import { getCandles, getPosition, placeOrder, placePositionSlTp, setLeverage, type Position } from "./bitunix";
 import { calcSqz } from "./sqz";
 import { calcMtf, countConsecutiveDir } from "./mtf";
 import { calcRsiSignal, rsiLongSignal, rsiShortSignal } from "./rsi";
 import { calcCerebro } from "./cerebro";
-import { calcRrDynamic, calcSlTp, calcPositionSize } from "./risk";
+import { calcRrDynamic, calcSlTp } from "./risk";
 import { getCurrentSession } from "./sessions";
 import { saveTrade, saveSignalLog, getOpenTrade, updateTrade, getBotConfig, setBotConfig } from "./supabase";
 import { notify, buildOpenedMsg, buildClosedMsg, buildCompressionMsg, buildSetupMsg } from "./notify";
@@ -27,7 +27,7 @@ async function getConfig(key: string, envKey: string, fallback: number): Promise
   return getEnvNum(envKey, fallback);
 }
 
-export async function runBotForSymbol(symbol: string): Promise<BotRunResult> {
+export async function runBotForSymbol(symbol: string, signalOnly = false): Promise<BotRunResult> {
   const ts = new Date().toISOString();
   const result: BotRunResult = { symbol, action: "NONE", details: {}, timestamp: ts };
 
@@ -435,20 +435,26 @@ export async function runBotForSymbol(symbol: string): Promise<BotRunResult> {
     rrDynamic,
   });
 
-  const posResult = calcPositionSize({
-    capital, riskPerTrade,
-    close: curCandle.close,
-    sl, tp, side, adxStrength,
-    score: entryScore, minScore,
-    stepSize: 0.001,
-  });
+  // Posición fija $100 notional con apalancamiento configurado
+  const POSITION_USD = 100;
+  const stepSize = 0.001;
+  const rawContracts = POSITION_USD / curCandle.close;
+  const contracts = Math.floor(rawContracts / stepSize) * stepSize;
+  const positionUsd = Math.round(contracts * curCandle.close * 100) / 100;
+  const riskUsd = Math.abs(curCandle.close - sl) / curCandle.close * positionUsd;
 
-  if (posResult.contracts <= 0) {
+  if (contracts <= 0) {
     signalLog.action_taken = "SKIPPED_SIZE_ZERO";
     await saveSignalLog(signalLog);
     result.action = "SKIPPED_SIZE_ZERO";
-    result.details = { side, entryScore, setupType, close: curCandle.close, capital, riskPerTrade };
-    notify(`⚠️ <b>NEXUS IA · TAMAÑO CERO</b>\n━━━━━━━━━━━━━━━━━━\n📊 <b>${symbol}</b> ${side} · Score ${entryScore}/9  [${setupType}]\n🕐 5M ${mtf.tf5m === "BULL" ? "▲" : mtf.tf5m === "BEAR" ? "▼" : "—"} · 15M ${mtf.tf15m === "BULL" ? "▲" : mtf.tf15m === "BEAR" ? "▼" : "—"} · 1H ${mtf.tf1h === "BULL" ? "▲" : mtf.tf1h === "BEAR" ? "▼" : "—"} · 4H ${mtf.tf4h === "BULL" ? "▲" : mtf.tf4h === "BEAR" ? "▼" : "—"}\n💵 Entry aprox: $${curCandle.close.toFixed(curCandle.close >= 1000 ? 0 : 4)}\n💰 Capital $${capital} insuficiente para min. stepSize\n⚡ Ajustar capital o stepSize en config`).catch(() => {});
+    result.details = { side, entryScore, setupType, close: curCandle.close };
+    return result;
+  }
+
+  // Modo señal: devolver info sin abrir orden (para selección de mejor señal en cron)
+  if (signalOnly) {
+    result.action = "SIGNAL_READY";
+    result.details = { side, entryScore, setupType, sl, tp, close: curCandle.close, contracts, positionUsd };
     return result;
   }
 
@@ -457,10 +463,17 @@ export async function runBotForSymbol(symbol: string): Promise<BotRunResult> {
   const orderSide = side === "LONG" ? "BUY" : "SELL";
   const closeSide = side === "LONG" ? "SELL" : "BUY";
 
+  // Configurar apalancamiento antes de abrir
+  try {
+    await setLeverage(symbol, leverage);
+  } catch (e) {
+    console.warn(`[Bot] setLeverage skip: ${e}`);
+  }
+
   try {
     orderId = await placeOrder({
       symbol, side: orderSide, tradeSide: "OPEN",
-      orderType: "MARKET", quantity: posResult.contracts,
+      orderType: "MARKET", quantity: contracts,
     });
   } catch (e) {
     const errMsg = String(e).slice(0, 150);
@@ -479,7 +492,7 @@ export async function runBotForSymbol(symbol: string): Promise<BotRunResult> {
     symbol, side,
     entry_price: curCandle.close,
     sl, tp,
-    size: posResult.contracts,
+    size: contracts,
     score: entryScore,
     setup_type: setupType,
     session: session.session,
@@ -505,9 +518,9 @@ export async function runBotForSymbol(symbol: string): Promise<BotRunResult> {
     symbol, side,
     entryPrice: curCandle.close,
     sl, tp,
-    contracts: posResult.contracts,
-    positionUsd: posResult.positionUsd,
-    riskUsd: posResult.riskUsd,
+    contracts,
+    positionUsd,
+    riskUsd,
     score: entryScore,
     session: session.session,
     highSqz: sqz15m.highSqz,
@@ -527,9 +540,9 @@ export async function runBotForSymbol(symbol: string): Promise<BotRunResult> {
     orderId,
     entryPrice: curCandle.close,
     sl, tp,
-    contracts: posResult.contracts,
-    positionUsd: posResult.positionUsd,
-    riskUsd: posResult.riskUsd,
+    contracts,
+    positionUsd,
+    riskUsd,
     rrDynamic,
     score: entryScore,
     setupType,
