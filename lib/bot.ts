@@ -359,12 +359,12 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
     });
 
     // Alerta SETUP FORMANDO: 1H+4H alineados, score ≥ 3 pero sin llegar al gatillo
-    // Throttle: 1 vez cada 45 minutos por símbolo
+    // Throttle: 1 vez cada 3 horas por símbolo
     if (h1h4Aligned && bestScore >= 3 && bestScore < minScore) {
       const setupKey = `notify_setup_${symbol}`;
       const lastTs = await getBotConfig(setupKey);
-      const ninetyMinAgo = Date.now() - 45 * 60 * 1000;
-      if (!lastTs || parseInt(lastTs) < ninetyMinAgo) {
+      const threeHoursAgo = Date.now() - 3 * 60 * 60 * 1000;
+      if (!lastTs || parseInt(lastTs) < threeHoursAgo) {
         await setBotConfig(setupKey, String(Date.now()));
         notify(buildSetupMsg({
           symbol, side: setupSide,
@@ -381,12 +381,12 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
     }
 
     // Alerta COMPRESIÓN: sqzOff activo + score cercano al gatillo
-    // Throttle: 1 vez cada 2 horas por símbolo
+    // Throttle: 1 vez cada 3 horas por símbolo
     if (sqz15m.sqzOff && bestScore >= minScore - 1) {
       const throttleKey = `notify_sqz_${symbol}`;
       const lastNotifyTs = await getBotConfig(throttleKey);
-      const twoHoursAgo = Date.now() - 2 * 60 * 60 * 1000;
-      if (!lastNotifyTs || parseInt(lastNotifyTs) < twoHoursAgo) {
+      const threeHoursAgo = Date.now() - 3 * 60 * 60 * 1000;
+      if (!lastNotifyTs || parseInt(lastNotifyTs) < threeHoursAgo) {
         await setBotConfig(throttleKey, String(Date.now()));
         notify(buildCompressionMsg({
           symbol,
@@ -467,7 +467,14 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
   if (!tradingEnabled) {
     result.action = "BOT_DISABLED";
     result.details = { side, entryScore, setupType, sl, tp, close: curCandle.close };
-    notify(`⏸️ <b>NEXUS IA · SEÑAL LISTA (bot pausado)</b>\n━━━━━━━━━━━━━━━━━━\n📊 <b>${symbol}</b> ${side} · Score ${entryScore}/9\n💵 Entry: <code>$${curCandle.close}</code>\n🛑 SL: <code>$${sl.toFixed(2)}</code>  🎯 TP: <code>$${tp.toFixed(2)}</code>\n⏸️ Reactiva el bot para operar`).catch(() => {});
+    // Throttle: 1 vez cada 4 horas por símbolo+dirección para no spamear
+    const disabledKey = `notify_signal_${symbol}_${side}`;
+    const lastDisabledTs = await getBotConfig(disabledKey);
+    const fourHoursAgo = Date.now() - 4 * 60 * 60 * 1000;
+    if (!lastDisabledTs || parseInt(lastDisabledTs) < fourHoursAgo) {
+      await setBotConfig(disabledKey, String(Date.now()));
+      notify(`⏸️ <b>NEXUS IA · SEÑAL LISTA (bot pausado)</b>\n━━━━━━━━━━━━━━━━━━\n📊 <b>${symbol}</b> ${side} · Score ${entryScore}/9\n💵 Entry: <code>$${curCandle.close}</code>\n🛑 SL: <code>$${sl.toFixed(2)}</code>  🎯 TP: <code>$${tp.toFixed(2)}</code>\n⏸️ Reactiva el bot para operar`).catch(() => {});
+    }
     return result;
   }
 
