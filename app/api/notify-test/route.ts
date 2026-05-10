@@ -41,13 +41,22 @@ export async function GET() {
   const tgChat = process.env.TELEGRAM_CHAT_ID;
   if (tgToken && tgChat) {
     try {
-      await sendTelegram(message);
-      results.telegram = "enviado ✓";
+      // Llamada directa para ver la respuesta real de la API
+      const res = await fetch(`https://api.telegram.org/bot${tgToken}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: tgChat, text: message, parse_mode: "HTML" }),
+        signal: AbortSignal.timeout(8000),
+      });
+      const body = await res.json();
+      results.telegram = `HTTP ${res.status} · ok=${body.ok} · ${body.ok ? "enviado ✓" : JSON.stringify(body.description ?? body)}`;
+      results.telegram_chat_id = tgChat.slice(0, 6) + "...";
+      results.telegram_token_hint = tgToken.slice(0, 10) + "...";
     } catch (e) {
       results.telegram = `error: ${e}`;
     }
   } else {
-    results.telegram = "no configurado (faltan TELEGRAM_BOT_TOKEN o TELEGRAM_CHAT_ID)";
+    results.telegram = `no configurado · token=${tgToken ? "✓" : "FALTA"} · chat_id=${tgChat ? "✓" : "FALTA"}`;
   }
 
   return NextResponse.json({ ok: true, results, timestamp: new Date().toISOString() });
