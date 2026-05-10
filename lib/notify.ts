@@ -38,6 +38,7 @@ export interface OpenedCtx {
   adxStrength: string;
   setupType: string;
   tf5m: string; tf15m: string; tf1h: string; tf4h: string;
+  gtTimeframes: string;
 }
 
 function tfArrow(tf: string): string {
@@ -53,11 +54,12 @@ function setupLabel(setupType: string): string {
 }
 
 export function buildOpenedMsg(ctx: OpenedCtx): string {
-  const { symbol, side, entryPrice: e, sl, tp, contracts, positionUsd, riskUsd, score, session, highSqz, midSqz, sqzOff, sqzOn, adxStrength, setupType, tf5m, tf15m, tf1h, tf4h } = ctx;
+  const { symbol, side, entryPrice: e, sl, tp, contracts, positionUsd, riskUsd, score, session, highSqz, midSqz, sqzOff, sqzOn, adxStrength, setupType, tf5m, tf15m, tf1h, tf4h, gtTimeframes } = ctx;
   const emoji = side === "LONG" ? "🟢" : "🔴";
   return `${emoji} <b>NEXUS IA · ${side} ABIERTO</b>
 ━━━━━━━━━━━━━━━━━━
 📊 <b>${symbol}</b> · Score <b>${score}/9</b>  [${setupLabel(setupType)}]
+📐 Triángulo Dorado: <b>${gtTimeframes}</b>
 🕐 5M ${tfArrow(tf5m)} · 15M ${tfArrow(tf15m)} · 1H ${tfArrow(tf1h)} · 4H ${tfArrow(tf4h)}
 💵 Entry: <code>$${fmtPrice(e)}</code>
 🛑 SL:    <code>$${fmtPrice(sl)}</code>  (-${diffPct(e, sl)}%)
@@ -65,6 +67,29 @@ export function buildOpenedMsg(ctx: OpenedCtx): string {
 📦 Size:  <code>${contracts} · $${positionUsd.toFixed(0)}</code>  Riesgo: $${riskUsd.toFixed(0)}
 ⚡ Sqz: ${sqzLabel(highSqz, midSqz, sqzOff, sqzOn)}
 💪 ADX: ${adxStrength}  |  🕐 ${session}
+🕑 ${localTime()} (Lima)`;
+}
+
+export interface GoldenTriangleCtx {
+  symbol: string; side: "LONG" | "SHORT";
+  score: number; gtTimeframes: string;
+  entryPrice: number; sl: number; tp: number;
+  botPaused: boolean;
+}
+
+export function buildGoldenTriangleMsg(ctx: GoldenTriangleCtx): string {
+  const { symbol, side, score, gtTimeframes, entryPrice, sl, tp, botPaused } = ctx;
+  const emoji = side === "LONG" ? "🟢" : "🔴";
+  const header = botPaused
+    ? `${emoji} <b>NEXUS IA · TRIÁNGULO DORADO (bot pausado)</b>`
+    : `${emoji} <b>NEXUS IA · TRIÁNGULO DORADO CONFIRMADO</b>`;
+  return `${header}
+━━━━━━━━━━━━━━━━━━
+📊 <b>${symbol}</b> · ${side} · Score <b>${score}/9</b>
+📐 TF confirmado: <b>${gtTimeframes}</b>
+💵 Precio: <code>$${fmtPrice(entryPrice)}</code>
+🛑 SL aprox: <code>$${fmtPrice(sl)}</code>  (-${diffPct(entryPrice, sl)}%)
+🎯 TP aprox: <code>$${fmtPrice(tp)}</code>  (+${diffPct(entryPrice, tp)}%)${botPaused ? "\n⏸️ Reactiva el bot para operar" : ""}
 🕑 ${localTime()} (Lima)`;
 }
 

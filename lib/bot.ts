@@ -6,7 +6,7 @@ import { calcCerebro } from "./cerebro";
 import { calcRrDynamic, calcSlTp } from "./risk";
 import { getCurrentSession } from "./sessions";
 import { saveTrade, saveSignalLog, getOpenTrade, updateTrade, getBotConfig, setBotConfig } from "./supabase";
-import { notify, buildOpenedMsg, buildClosedMsg, buildCompressionMsg, buildSetupMsg } from "./notify";
+import { notify, buildOpenedMsg, buildClosedMsg, buildCompressionMsg, buildSetupMsg, buildGoldenTriangleMsg } from "./notify";
 import type { Candle } from "./math";
 
 export interface BotRunResult {
@@ -253,6 +253,15 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
   const goldenTriangleLong  = sqz15m.sqzOff && sqz15m.sqzVal > 0;
   const goldenTriangleShort = sqz15m.sqzOff && sqz15m.sqzVal < 0;
 
+  // Detectar en qué TFs está activo el triángulo dorado (para el mensaje de notificación)
+  function calcGtTfs(s: "LONG" | "SHORT"): string {
+    const tfs: string[] = [];
+    if (sqz15m.sqzOff && (s === "LONG" ? sqz15m.sqzVal > 0 : sqz15m.sqzVal < 0)) tfs.push("15M");
+    if (sqz1h.sqzOff  && (s === "LONG" ? sqz1h.sqzVal  > 0 : sqz1h.sqzVal  < 0)) tfs.push("1H");
+    if (sqz4h.sqzOff  && (s === "LONG" ? sqz4h.sqzVal  > 0 : sqz4h.sqzVal  < 0)) tfs.push("4H");
+    return tfs.join(" + ") || "15M";
+  }
+
   // ONE_TF entries require a higher score since 4H is not aligned
   const effectiveMinScore = mtf.setup === "ONE_TF" ? minScore + 1 : minScore;
 
@@ -466,14 +475,18 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
   // Si kill switch activo: señal detectada pero no abrir posición
   if (!tradingEnabled) {
     result.action = "BOT_DISABLED";
-    result.details = { side, entryScore, setupType, sl, tp, close: curCandle.close };
-    // Throttle: 1 vez cada 4 horas por símbolo+dirección para no spamear
-    const disabledKey = `notify_signal_${symbol}_${side}`;
-    const lastDisabledTs = await getBotConfig(disabledKey);
-    const fourHoursAgo = Date.now() - 4 * 60 * 60 * 1000;
-    if (!lastDisabledTs || parseInt(lastDisabledTs) < fourHoursAgo) {
-      await setBotConfig(disabledKey, String(Date.now()));
-      notify(`⏸️ <b>NEXUS IA · SEÑAL LISTA (bot pausado)</b>\n━━━━━━━━━━━━━━━━━━\n📊 <b>${symbol}</b> ${side} · Score ${entryScore}/9\n💵 Entry: <code>$${curCandle.close}</code>\n🛑 SL: <code>$${sl.toFixed(2)}</code>  🎯 TP: <code>$${tp.toFixed(2)}</code>\n⏸️ Reactiva el bot para operar`).catch(() => {});
+    const gtTfs = calcGtTfs(side);
+    result.details = { side, entryScore, setupType, sl, tp, close: curCandle.close, gtTimeframes: gtTfs };
+    // Dedup por vela de 15M — notificar solo una vez por evento (no repetir cada 60s)
+    const candleSlot = String(Math.floor(Date.now() / (15 * 60 * 1000)));
+    const gtKey = `notify_gt_${symbol}_${side}`;
+    const lastSlot = await getBotConfig(gtKey);
+    if (lastSlot !== candleSlot) {
+      await setBotConfig(gtKey, candleSlot);
+      notify(buildGoldenTriangleMsg({
+        symbol, side, score: entryScore, gtTimeframes: gtTfs,
+        entryPrice: curCandle.close, sl, tp, botPaused: true,
+      })).catch(() => {});
     }
     return result;
   }
@@ -552,6 +565,7 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
     tf15m: mtf.tf15m,
     tf1h: mtf.tf1h,
     tf4h: mtf.tf4h,
+    gtTimeframes: calcGtTfs(side),
   })).catch(() => {});
 
   result.action = `OPENED_${side}`;
