@@ -243,17 +243,21 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
 
   // ── FILTROS DE ENTRADA ──────────────────────────────────────────────────────
 
-  // Gatillo 5M: bono +1 punto si el 5M confirma dirección (ya no es bloqueo duro)
+  // Gatillo 5M: bono +1 punto si el 5M confirma dirección
   const gate5mLong  = sqz5m.sqzVal > 0;
   const gate5mShort = sqz5m.sqzVal < 0;
   const effectiveScoreLong  = Math.min(9, scoreLong  + (gate5mLong  ? 1 : 0));
   const effectiveScoreShort = Math.min(9, scoreShort + (gate5mShort ? 1 : 0));
 
-  // Persistencia 15M: la señal debe llevar al menos 2 velas 15M consecutivas
+  // Persistencia 15M: momentum positivo/negativo en al menos 2 velas consecutivas
   const persist15mLong  = sqz15m.sqzVal > 0 && sqz15mPrev.sqzVal > 0;
   const persist15mShort = sqz15m.sqzVal < 0 && sqz15mPrev.sqzVal < 0;
 
-    // ONE_TF entries require a higher score since 4H is not aligned
+  // Triángulo dorado: squeeze se dispara en 15M (sqzOff = transición de compresión a expansión)
+  const goldenTriangleLong  = sqz15m.sqzOff && sqz15m.sqzVal > 0;
+  const goldenTriangleShort = sqz15m.sqzOff && sqz15m.sqzVal < 0;
+
+  // ONE_TF entries require a higher score since 4H is not aligned
   const effectiveMinScore = mtf.setup === "ONE_TF" ? minScore + 1 : minScore;
 
   const canOpenLong =
@@ -262,7 +266,8 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
     mtf.canTrade &&
     adxStrength !== "WEAK" &&
     !cerebro.antiTrampaLong &&
-    persist15mLong;
+    persist15mLong &&
+    goldenTriangleLong;   // triángulo dorado: squeeze dispara en 15M hacia arriba
 
   const canOpenShort =
     effectiveScoreShort >= effectiveMinScore &&
@@ -270,11 +275,12 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
     mtf.canTrade &&
     adxStrength !== "WEAK" &&
     !cerebro.antiTrampaShort &&
-    persist15mShort;
+    persist15mShort &&
+    goldenTriangleShort;  // triángulo dorado: squeeze dispara en 15M hacia abajo
 
-  // RSI pivot (señal independiente — también requiere confirmaciones)
-  const rsiLongEntry  = rsiBuySignal  && rsiResult.zoneNumeric <= 45 && mtf.direction === "LONG"  && effectiveScoreLong  >= minScore && adxStrength !== "WEAK";
-  const rsiShortEntry = rsiSellSignal && rsiResult.zoneNumeric >= 55 && mtf.direction === "SHORT" && effectiveScoreShort >= minScore && adxStrength !== "WEAK";
+  // RSI pivot: también requiere triángulo dorado en 15M para confirmar
+  const rsiLongEntry  = rsiBuySignal  && rsiResult.zoneNumeric <= 45 && mtf.direction === "LONG"  && effectiveScoreLong  >= minScore && adxStrength !== "WEAK" && goldenTriangleLong;
+  const rsiShortEntry = rsiSellSignal && rsiResult.zoneNumeric >= 55 && mtf.direction === "SHORT" && effectiveScoreShort >= minScore && adxStrength !== "WEAK" && goldenTriangleShort;
 
   // Codifica TF directions en mtf_setup para el dashboard (sin cambio de schema)
   const tfTag = `|${mtf.tf5m}|${mtf.tf15m}|${mtf.tf1h}|${mtf.tf4h}`;
@@ -318,6 +324,7 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
       else if (effectiveScoreLong < minScore)   blockReason = `SCORE_${effectiveScoreLong}<${minScore}`;
       else if (cerebro.antiTrampaLong)          blockReason = "ANTI_TRAP";
       else if (!persist15mLong)                 blockReason = "PERSIST_15M";
+      else if (!goldenTriangleLong)             blockReason = "WAIT_GOLDEN_TRIANGLE";
       else                                       blockReason = "UNKNOWN";
     } else if (dir === "SHORT") {
       if (!mtf.canTrade)                        blockReason = `MTF_${mtf.setup}`;
@@ -325,6 +332,7 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
       else if (effectiveScoreShort < minScore)  blockReason = `SCORE_${effectiveScoreShort}<${minScore}`;
       else if (cerebro.antiTrampaShort)         blockReason = "ANTI_TRAP";
       else if (!persist15mShort)                blockReason = "PERSIST_15M";
+      else if (!goldenTriangleShort)            blockReason = "WAIT_GOLDEN_TRIANGLE";
       else                                       blockReason = "UNKNOWN";
     } else {
       blockReason = `MTF_${mtf.setup}`;
@@ -355,11 +363,11 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
     });
 
     // Alerta SETUP FORMANDO: 1H+4H alineados, score ≥ 3 pero sin llegar al gatillo
-    // Throttle: 1 vez cada 90 minutos por símbolo
+    // Throttle: 1 vez cada 45 minutos por símbolo
     if (h1h4Aligned && bestScore >= 3 && bestScore < minScore) {
       const setupKey = `notify_setup_${symbol}`;
       const lastTs = await getBotConfig(setupKey);
-      const ninetyMinAgo = Date.now() - 90 * 60 * 1000;
+      const ninetyMinAgo = Date.now() - 45 * 60 * 1000;
       if (!lastTs || parseInt(lastTs) < ninetyMinAgo) {
         await setBotConfig(setupKey, String(Date.now()));
         notify(buildSetupMsg({
