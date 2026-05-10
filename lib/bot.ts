@@ -72,11 +72,13 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
   }
 
   // Calcular indicadores base (necesarios tanto para gestión como para entrada)
-  const sqz5m   = calcSqz(candles5m);
-  const sqz15m   = calcSqz(candles15m);
+  const sqz5m      = calcSqz(candles5m);
+  const sqz15m     = calcSqz(candles15m);
   const sqz15mPrev = calcSqz(candles15m.slice(0, -1));
-  const sqz1h   = calcSqz(candles1h);
-  const sqz4h   = calcSqz(candles4h);
+  const sqz1h      = calcSqz(candles1h);
+  const sqz1hPrev  = calcSqz(candles1h.slice(0, -1));
+  const sqz4h      = calcSqz(candles4h);
+  const sqz4hPrev  = calcSqz(candles4h.slice(0, -1));
 
   // 3. Gestión de posición abierta
   let openPosition: Position | null = null;
@@ -245,47 +247,42 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
   const effectiveScoreLong  = Math.min(9, scoreLong  + (gate5mLong  ? 1 : 0));
   const effectiveScoreShort = Math.min(9, scoreShort + (gate5mShort ? 1 : 0));
 
-  // Persistencia 15M: momentum positivo/negativo en al menos 2 velas consecutivas
-  const persist15mLong  = sqz15m.sqzVal > 0 && sqz15mPrev.sqzVal > 0;
-  const persist15mShort = sqz15m.sqzVal < 0 && sqz15mPrev.sqzVal < 0;
+  // Triángulo dorado: SOLO la vela de TRANSICIÓN (vela anterior sqzOn, vela actual sqzOff)
+  // Esto replica exactamente TradingView — sqzOff persistente NO cuenta, solo el disparo exacto
+  const goldenTriangleLong  = sqz15mPrev.sqzOn && sqz15m.sqzOff && sqz15m.sqzVal > 0;
+  const goldenTriangleShort = sqz15mPrev.sqzOn && sqz15m.sqzOff && sqz15m.sqzVal < 0;
 
-  // Triángulo dorado: squeeze se dispara en 15M (sqzOff = transición de compresión a expansión)
-  const goldenTriangleLong  = sqz15m.sqzOff && sqz15m.sqzVal > 0;
-  const goldenTriangleShort = sqz15m.sqzOff && sqz15m.sqzVal < 0;
-
-  // Detectar en qué TFs está activo el triángulo dorado (para el mensaje de notificación)
+  // Detectar en qué TFs está activo el triángulo dorado (transición en cada TF)
   function calcGtTfs(s: "LONG" | "SHORT"): string {
     const tfs: string[] = [];
-    if (sqz15m.sqzOff && (s === "LONG" ? sqz15m.sqzVal > 0 : sqz15m.sqzVal < 0)) tfs.push("15M");
-    if (sqz1h.sqzOff  && (s === "LONG" ? sqz1h.sqzVal  > 0 : sqz1h.sqzVal  < 0)) tfs.push("1H");
-    if (sqz4h.sqzOff  && (s === "LONG" ? sqz4h.sqzVal  > 0 : sqz4h.sqzVal  < 0)) tfs.push("4H");
+    if (sqz15mPrev.sqzOn && sqz15m.sqzOff && (s === "LONG" ? sqz15m.sqzVal > 0 : sqz15m.sqzVal < 0)) tfs.push("15M");
+    if (sqz1hPrev.sqzOn  && sqz1h.sqzOff  && (s === "LONG" ? sqz1h.sqzVal  > 0 : sqz1h.sqzVal  < 0)) tfs.push("1H");
+    if (sqz4hPrev.sqzOn  && sqz4h.sqzOff  && (s === "LONG" ? sqz4h.sqzVal  > 0 : sqz4h.sqzVal  < 0)) tfs.push("4H");
     return tfs.join(" + ") || "15M";
   }
 
-  // ONE_TF entries require a higher score since 4H is not aligned
-  const effectiveMinScore = mtf.setup === "ONE_TF" ? minScore + 1 : minScore;
-
+  // Entrada: el TRIÁNGULO DORADO es el disparador principal — el score es informativo, no un gate
+  // Condiciones: triángulo dorado (transición) + dirección MTF alineada + ADX no débil + anti-trampa
   const canOpenLong =
-    effectiveScoreLong >= effectiveMinScore &&
+    goldenTriangleLong &&
     mtf.direction === "LONG" &&
     mtf.canTrade &&
     adxStrength !== "WEAK" &&
-    !cerebro.antiTrampaLong &&
-    persist15mLong &&
-    goldenTriangleLong;   // triángulo dorado: squeeze dispara en 15M hacia arriba
+    !cerebro.antiTrampaLong;
 
   const canOpenShort =
-    effectiveScoreShort >= effectiveMinScore &&
+    goldenTriangleShort &&
     mtf.direction === "SHORT" &&
     mtf.canTrade &&
     adxStrength !== "WEAK" &&
-    !cerebro.antiTrampaShort &&
-    persist15mShort &&
-    goldenTriangleShort;  // triángulo dorado: squeeze dispara en 15M hacia abajo
+    !cerebro.antiTrampaShort;
 
   // RSI pivot: también requiere triángulo dorado en 15M para confirmar
-  const rsiLongEntry  = rsiBuySignal  && rsiResult.zoneNumeric <= 45 && mtf.direction === "LONG"  && effectiveScoreLong  >= minScore && adxStrength !== "WEAK" && goldenTriangleLong;
-  const rsiShortEntry = rsiSellSignal && rsiResult.zoneNumeric >= 55 && mtf.direction === "SHORT" && effectiveScoreShort >= minScore && adxStrength !== "WEAK" && goldenTriangleShort;
+  const rsiLongEntry  = rsiBuySignal  && rsiResult.zoneNumeric <= 45 && mtf.direction === "LONG"  && adxStrength !== "WEAK" && goldenTriangleLong;
+  const rsiShortEntry = rsiSellSignal && rsiResult.zoneNumeric >= 55 && mtf.direction === "SHORT" && adxStrength !== "WEAK" && goldenTriangleShort;
+
+  // effectiveMinScore se mantiene para uso en alertas SETUP/COMPRESIÓN (no para entrada)
+  const effectiveMinScore = mtf.setup === "ONE_TF" ? minScore + 1 : minScore;
 
   // Codifica TF directions en mtf_setup para el dashboard (sin cambio de schema)
   const tfTag = `|${mtf.tf5m}|${mtf.tf15m}|${mtf.tf1h}|${mtf.tf4h}`;
@@ -324,21 +321,17 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
     const dir = mtf.direction;
     let blockReason: string;
     if (dir === "LONG") {
-      if (!mtf.canTrade)                        blockReason = `MTF_${mtf.setup}`;
-      else if (adxStrength === "WEAK")          blockReason = "ADX_WEAK";
-      else if (effectiveScoreLong < minScore)   blockReason = `SCORE_${effectiveScoreLong}<${minScore}`;
-      else if (cerebro.antiTrampaLong)          blockReason = "ANTI_TRAP";
-      else if (!persist15mLong)                 blockReason = "PERSIST_15M";
-      else if (!goldenTriangleLong)             blockReason = "WAIT_GOLDEN_TRIANGLE";
-      else                                       blockReason = "UNKNOWN";
+      if (!mtf.canTrade)           blockReason = `MTF_${mtf.setup}`;
+      else if (adxStrength === "WEAK") blockReason = "ADX_WEAK";
+      else if (cerebro.antiTrampaLong) blockReason = "ANTI_TRAP";
+      else if (!goldenTriangleLong)    blockReason = "WAIT_GOLDEN_TRIANGLE";
+      else                             blockReason = "UNKNOWN";
     } else if (dir === "SHORT") {
-      if (!mtf.canTrade)                        blockReason = `MTF_${mtf.setup}`;
-      else if (adxStrength === "WEAK")          blockReason = "ADX_WEAK";
-      else if (effectiveScoreShort < minScore)  blockReason = `SCORE_${effectiveScoreShort}<${minScore}`;
-      else if (cerebro.antiTrampaShort)         blockReason = "ANTI_TRAP";
-      else if (!persist15mShort)                blockReason = "PERSIST_15M";
-      else if (!goldenTriangleShort)            blockReason = "WAIT_GOLDEN_TRIANGLE";
-      else                                       blockReason = "UNKNOWN";
+      if (!mtf.canTrade)            blockReason = `MTF_${mtf.setup}`;
+      else if (adxStrength === "WEAK")  blockReason = "ADX_WEAK";
+      else if (cerebro.antiTrampaShort) blockReason = "ANTI_TRAP";
+      else if (!goldenTriangleShort)    blockReason = "WAIT_GOLDEN_TRIANGLE";
+      else                              blockReason = "UNKNOWN";
     } else {
       blockReason = `MTF_${mtf.setup}`;
     }
@@ -422,7 +415,7 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
       adxStrength,
       rsiZone: rsiResult.zone,
       gate5mLong, gate5mShort,
-      persist15mLong, persist15mShort,
+      goldenTriangleLong, goldenTriangleShort,
       antiTrampaLong: cerebro.antiTrampaLong,
       antiTrampaShort: cerebro.antiTrampaShort,
       blockReason,
