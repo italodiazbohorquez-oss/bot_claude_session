@@ -35,13 +35,8 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
   const botEnabled = await getBotConfig("bot_enabled");
   const tradingEnabled = botEnabled !== "false";
 
-  // 1. Verificar sesión
+  // 1. Sesión — solo bloquea apertura de posiciones, no notificaciones ni análisis
   const session = getCurrentSession();
-  if (!session.active) {
-    result.action = "NO_SESSION";
-    result.details = { session: session.session, utcHour: session.utcHour };
-    return result;
-  }
 
   // Config dinámica
   const capital = await getConfig("capital", "CAPITAL", 1000);
@@ -72,13 +67,11 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
   }
 
   // 3. Indicadores — calculados siempre, incluso con posición abierta (necesarios para watchlist)
-  const sqz5m      = calcSqz(candles5m);
-  const sqz15m     = calcSqz(candles15m);
-  const sqz15mPrev = calcSqz(candles15m.slice(0, -1));
-  const sqz1h      = calcSqz(candles1h);
-  const sqz1hPrev  = calcSqz(candles1h.slice(0, -1));
-  const sqz4h      = calcSqz(candles4h);
-  const sqz4hPrev  = calcSqz(candles4h.slice(0, -1));
+  // sqzPrevVal ya viene incluido en calcSqz (prev bar del linreg), no necesitamos recalcular
+  const sqz5m  = calcSqz(candles5m);
+  const sqz15m = calcSqz(candles15m);
+  const sqz1h  = calcSqz(candles1h);
+  const sqz4h  = calcSqz(candles4h);
 
   const tf1hConsecutiveBull = countConsecutiveDir([sqz1h], "BULL");
   const tf1hConsecutiveBear = countConsecutiveDir([sqz1h], "BEAR");
@@ -93,7 +86,7 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
     rsiPivotLong: rsiBuySignal, rsiPivotShort: rsiSellSignal,
   });
 
-  const cerebro = calcCerebro(candles15m, sqz1h, sqz4h, sqz15m, sqz15mPrev, candles1h, sqz5m);
+  const cerebro = calcCerebro(candles15m, sqz1h, sqz4h, sqz15m, sqz15m.sqzPrevVal, candles1h, sqz5m);
   let scoreLong  = cerebro.scoreLong;
   let scoreShort = cerebro.scoreShort;
   if (rsiResult.divergence === "BULL") scoreLong  = Math.min(9, scoreLong + 1);
@@ -264,20 +257,20 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
   // Triángulo dorado: giro_alza / giro_baja — igual que el screener HTML y TradingView
   // giro_alza: momentum negativo pero subiendo → LONG inminente (vela previa a cruzar cero)
   // giro_baja: momentum positivo pero bajando → SHORT inminente
-  const goldenTriangleLong  = sqz15m.sqzVal < 0 && sqz15m.sqzVal > sqz15mPrev.sqzVal;
-  const goldenTriangleShort = sqz15m.sqzVal > 0 && sqz15m.sqzVal < sqz15mPrev.sqzVal;
+  const goldenTriangleLong  = sqz15m.sqzVal < 0 && sqz15m.sqzVal > sqz15m.sqzPrevVal;
+  const goldenTriangleShort = sqz15m.sqzVal > 0 && sqz15m.sqzVal < sqz15m.sqzPrevVal;
 
   // Detectar en qué TFs está activo el triángulo dorado (misma lógica giro_alza/giro_baja por TF)
   function calcGtTfs(s: "LONG" | "SHORT"): string {
     const tfs: string[] = [];
     if (s === "LONG") {
-      if (sqz15m.sqzVal < 0 && sqz15m.sqzVal > sqz15mPrev.sqzVal) tfs.push("15M");
-      if (sqz1h.sqzVal  < 0 && sqz1h.sqzVal  > sqz1hPrev.sqzVal)  tfs.push("1H");
-      if (sqz4h.sqzVal  < 0 && sqz4h.sqzVal  > sqz4hPrev.sqzVal)  tfs.push("4H");
+      if (sqz15m.sqzVal < 0 && sqz15m.sqzVal > sqz15m.sqzPrevVal) tfs.push("15M");
+      if (sqz1h.sqzVal  < 0 && sqz1h.sqzVal  > sqz1h.sqzPrevVal)  tfs.push("1H");
+      if (sqz4h.sqzVal  < 0 && sqz4h.sqzVal  > sqz4h.sqzPrevVal)  tfs.push("4H");
     } else {
-      if (sqz15m.sqzVal > 0 && sqz15m.sqzVal < sqz15mPrev.sqzVal) tfs.push("15M");
-      if (sqz1h.sqzVal  > 0 && sqz1h.sqzVal  < sqz1hPrev.sqzVal)  tfs.push("1H");
-      if (sqz4h.sqzVal  > 0 && sqz4h.sqzVal  < sqz4hPrev.sqzVal)  tfs.push("4H");
+      if (sqz15m.sqzVal > 0 && sqz15m.sqzVal < sqz15m.sqzPrevVal) tfs.push("15M");
+      if (sqz1h.sqzVal  > 0 && sqz1h.sqzVal  < sqz1h.sqzPrevVal)  tfs.push("1H");
+      if (sqz4h.sqzVal  > 0 && sqz4h.sqzVal  < sqz4h.sqzPrevVal)  tfs.push("4H");
     }
     return tfs.join(" + ") || "15M";
   }
@@ -488,6 +481,13 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
   if (!tradingEnabled) {
     result.action = "BOT_DISABLED";
     result.details = { side, entryScore, setupType, sl, tp, close: curCandle.close };
+    return result;
+  }
+
+  // Sesión inactiva: señal detectada pero no abrir posición (notificación ya enviada)
+  if (!session.active) {
+    result.action = "NO_SESSION";
+    result.details = { side, entryScore, setupType, session: session.session, utcHour: session.utcHour };
     return result;
   }
 

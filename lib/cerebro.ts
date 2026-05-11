@@ -65,7 +65,7 @@ export function calcCerebro(
   sqz1h: SqzResult,
   sqz4h: SqzResult,
   sqz15m: SqzResult,
-  sqz15mPrev: SqzResult,
+  sqz15mPrevVal: number,
   candles1h: Candle[],
   sqz5m: SqzResult
 ): CerebroResult {
@@ -160,8 +160,8 @@ export function calcCerebro(
   const ema9Val = ema9Arr[n - 1];
   const giroAlza = sqz5m.sqzVal > sqz5m.sqzPrevVal && sqz5m.sqzVal < 0;
   const giroBaja = sqz5m.sqzVal < sqz5m.sqzPrevVal && sqz5m.sqzVal > 0;
-  const antiTrampaLong = giroAlza && curClose < ema9Val && sqz15m.sqzVal < sqz15mPrev.sqzVal;
-  const antiTrampaShort = giroBaja && curClose > ema9Val && sqz15m.sqzVal > sqz15mPrev.sqzVal;
+  const antiTrampaLong = giroAlza && curClose < ema9Val && sqz15m.sqzVal < sqz15mPrevVal;
+  const antiTrampaShort = giroBaja && curClose > ema9Val && sqz15m.sqzVal > sqz15mPrevVal;
 
   // ── SCORES
   const pointsLong = [p1_long, p2_long, p3_long, p4_long, p5_long, p6_long, p7_long, p8_long, p9_long];
