@@ -4,20 +4,16 @@ import { calcSqz } from "@/lib/sqz";
 import { calcMtf, countConsecutiveDir } from "@/lib/mtf";
 import { calcRsiSignal, rsiLongSignal, rsiShortSignal } from "@/lib/rsi";
 import { calcCerebro } from "@/lib/cerebro";
-import { calcRrDynamic, calcSlTp, calcPositionSize } from "@/lib/risk";
 import { getCurrentSession } from "@/lib/sessions";
 import { getBotConfig } from "@/lib/supabase";
-import { notify, buildOpenedMsg, buildSetupMsg } from "@/lib/notify";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
-  const symbol = (searchParams.get("symbol") ?? "ETHUSDT").toUpperCase();
-  const forceMode = searchParams.get("force") ?? "auto"; // "long" | "short" | "auto" | "setup"
+  const symbol = (searchParams.get("symbol") ?? "BTCUSDT").toUpperCase();
 
-  // Fetch candles
   const [c5m, c15m, c1h, c4h] = await Promise.all([
     getCandles(symbol, "5m", 200),
     getCandles(symbol, "15m", 200),
@@ -25,129 +21,71 @@ export async function GET(req: Request) {
     getCandles(symbol, "4h", 200),
   ]);
 
-  // Indicators
-  const sqz5m    = calcSqz(c5m);
-  const sqz15m   = calcSqz(c15m);
-  const sqz15mPrv = calcSqz(c15m.slice(0, -1));
-  const sqz1h    = calcSqz(c1h);
-  const sqz4h    = calcSqz(c4h);
+  const sqz5m  = calcSqz(c5m);
+  const sqz15m = calcSqz(c15m);
+  const sqz1h  = calcSqz(c1h);
+  const sqz4h  = calcSqz(c4h);
 
   const rsi = calcRsiSignal(c1h);
-  const rsiBuy  = rsiLongSignal(rsi);
-  const rsiSell = rsiShortSignal(rsi);
-
   const mtf = calcMtf({
     sqz5m, sqz15m, sqz1h, sqz4h,
     tf1hConsecutiveBull: countConsecutiveDir([sqz1h], "BULL"),
     tf1hConsecutiveBear: countConsecutiveDir([sqz1h], "BEAR"),
-    rsiPivotLong: rsiBuy, rsiPivotShort: rsiSell,
+    rsiPivotLong: rsiLongSignal(rsi), rsiPivotShort: rsiShortSignal(rsi),
   });
+  const cerebro = calcCerebro(c15m, sqz1h, sqz4h, sqz15m, sqz15m.sqzPrevVal, c1h, sqz5m);
 
-  const cerebro = calcCerebro(c15m, sqz1h, sqz4h, sqz15m, sqz15mPrv, c1h, sqz5m);
-  let scoreLong  = cerebro.scoreLong;
-  let scoreShort = cerebro.scoreShort;
-  if (rsi.divergence === "BULL") scoreLong  = Math.min(9, scoreLong  + 1);
-  if (rsi.divergence === "BEAR") scoreShort = Math.min(9, scoreShort + 1);
+  // Golden triangle conditions (giro_alza / giro_baja)
+  const goldenTriangleLong  = sqz15m.sqzVal < 0 && sqz15m.sqzVal > sqz15m.sqzPrevVal;
+  const goldenTriangleShort = sqz15m.sqzVal > 0 && sqz15m.sqzVal < sqz15m.sqzPrevVal;
 
-  const gate5mLong  = sqz5m.sqzVal > 0;
-  const gate5mShort = sqz5m.sqzVal < 0;
-  const effL = Math.min(9, scoreLong  + (gate5mLong  ? 1 : 0));
-  const effS = Math.min(9, scoreShort + (gate5mShort ? 1 : 0));
+  // Throttle key state
+  const gtKeyLong  = await getBotConfig(`notify_gt_${symbol}_LONG`);
+  const gtKeyShort = await getBotConfig(`notify_gt_${symbol}_SHORT`);
+  const twentyMinsAgo = Date.now() - 20 * 60 * 1000;
 
-  const minScoreRaw = await getBotConfig("min_score");
-  const minScore = parseFloat(minScoreRaw ?? process.env.MIN_SCORE ?? "4");
-  const capital = parseFloat(process.env.CAPITAL ?? "1000");
-  const leverage = parseFloat(process.env.LEVERAGE ?? "5");
-  const riskPerTrade = parseFloat(process.env.RISK_PER_TRADE ?? "1.0");
-  const rrRatio = parseFloat(process.env.RR_RATIO ?? "2.5");
-  const atrMult = parseFloat(process.env.ATR_MULT ?? "0.5");
   const session = getCurrentSession();
-
-  const curCandle  = c15m[c15m.length - 1];
-  const prevCandle = c15m[c15m.length - 2];
-
-  // Determine side for notification
-  let side: "LONG" | "SHORT";
-  if (forceMode === "long") {
-    side = "LONG";
-  } else if (forceMode === "short") {
-    side = "SHORT";
-  } else if (forceMode === "setup") {
-    // Send setup alert instead
-    const bestSide: "LONG" | "SHORT" = effL >= effS ? "LONG" : "SHORT";
-    const setupRrDynamic = calcRrDynamic({ capital, riskPerTrade, rrRatio, atrMult, leverage }, cerebro.rrFactors);
-    const { sl: setupSl, tp: setupTp } = calcSlTp({
-      side: bestSide, close: curCandle.close, high: curCandle.high, low: curCandle.low,
-      prevHigh: prevCandle.high, prevLow: prevCandle.low,
-      atr7: cerebro.atr7, atr50: cerebro.atr50, atrMult, rrDynamic: setupRrDynamic,
-    });
-    const msg = buildSetupMsg({
-      symbol, side: bestSide,
-      scoreLong: effL, scoreShort: effS,
-      tf15m: mtf.tf15m, tf1h: mtf.tf1h, tf4h: mtf.tf4h,
-      highSqz: sqz15m.highSqz, midSqz: sqz15m.midSqz,
-      sqzOff: sqz15m.sqzOff, sqzOn: sqz15m.sqzOn,
-      adxStrength: sqz15m.adxStrength, adxValue: sqz15m.adxValue,
-      minScore,
-      currentPrice: curCandle.close, sl: setupSl, tp: setupTp,
-    });
-    await notify(msg);
-    return NextResponse.json({
-      ok: true, type: "SETUP_ALERT", symbol, side: bestSide,
-      scores: { long: effL, short: effS },
-      price: curCandle.close, message: msg,
-    });
-  } else {
-    // auto: use the stronger direction
-    side = effL >= effS ? "LONG" : "SHORT";
-  }
-
-  const entryScore = side === "LONG" ? effL : effS;
-
-  // Calc SL/TP with real ATR
-  const rrDynamic = calcRrDynamic({ capital, riskPerTrade, rrRatio, atrMult, leverage }, cerebro.rrFactors);
-  const { sl, tp } = calcSlTp({
-    side, close: curCandle.close, high: curCandle.high, low: curCandle.low,
-    prevHigh: prevCandle.high, prevLow: prevCandle.low,
-    atr7: cerebro.atr7, atr50: cerebro.atr50, atrMult, rrDynamic,
-  });
-
-  const posResult = calcPositionSize({
-    capital, riskPerTrade, close: curCandle.close, sl, tp, side,
-    adxStrength: sqz15m.adxStrength, score: entryScore, minScore, stepSize: 0.001,
-  });
-
-  const msg = buildOpenedMsg({
-    symbol, side,
-    entryPrice: curCandle.close, sl, tp,
-    contracts: posResult.contracts,
-    positionUsd: posResult.positionUsd,
-    riskUsd: posResult.riskUsd,
-    score: entryScore,
-    session: session.session,
-    highSqz: sqz15m.highSqz, midSqz: sqz15m.midSqz,
-    sqzOff: sqz15m.sqzOff, sqzOn: sqz15m.sqzOn,
-    adxStrength: sqz15m.adxStrength,
-    setupType: `CEREBRO_${mtf.setup}_${side}`,
-    tf5m: mtf.tf5m, tf15m: mtf.tf15m, tf1h: mtf.tf1h, tf4h: mtf.tf4h,
-    gtTimeframes: "15M",
-  });
-
-  await notify(msg);
+  const curCandle = c15m[c15m.length - 1];
 
   return NextResponse.json({
-    ok: true,
-    type: "ENTRY_SIGNAL",
-    symbol, side,
-    price: curCandle.close, sl, tp,
-    scores: { long: scoreLong, short: scoreShort, effLong: effL, effShort: effS },
-    adx: { value: sqz15m.adxValue, strength: sqz15m.adxStrength },
-    sqz: { val15m: sqz15m.sqzVal, sqzOn: sqz15m.sqzOn, sqzOff: sqz15m.sqzOff, highSqz: sqz15m.highSqz },
-    mtf: { setup: mtf.setup, direction: mtf.direction, canTrade: mtf.canTrade },
-    positionUsd: posResult.positionUsd,
-    riskUsd: posResult.riskUsd,
-    contracts: posResult.contracts,
-    rrDynamic,
-    message: msg,
+    symbol,
+    timestamp: new Date().toISOString(),
+    session: { active: session.active, name: session.session, utcHour: session.utcHour },
+    price: curCandle.close,
+
+    // ── DIAGNÓSTICO TRIÁNGULO DORADO ──────────────────────────
+    sqz15m: {
+      sqzVal:     sqz15m.sqzVal,
+      sqzPrevVal: sqz15m.sqzPrevVal,
+      diff:       sqz15m.sqzVal - sqz15m.sqzPrevVal,
+      momentumDir: sqz15m.momentumDir,
+      sqzOn:  sqz15m.sqzOn,
+      sqzOff: sqz15m.sqzOff,
+      highSqz: sqz15m.highSqz,
+      adxValue: sqz15m.adxValue,
+      adxStrength: sqz15m.adxStrength,
+    },
+    sqz1h: {
+      sqzVal: sqz1h.sqzVal, sqzPrevVal: sqz1h.sqzPrevVal, momentumDir: sqz1h.momentumDir,
+    },
+    sqz4h: {
+      sqzVal: sqz4h.sqzVal, sqzPrevVal: sqz4h.sqzPrevVal, momentumDir: sqz4h.momentumDir,
+    },
+
+    goldenTriangle: {
+      // LONG  (giro_alza): sqzVal < 0 AND sqzVal > sqzPrevVal — momentum negativo girando arriba
+      long:  { firing: goldenTriangleLong,  condition: `${sqz15m.sqzVal.toFixed(6)} < 0 → ${sqz15m.sqzVal < 0} | ${sqz15m.sqzVal.toFixed(6)} > ${sqz15m.sqzPrevVal.toFixed(6)} → ${sqz15m.sqzVal > sqz15m.sqzPrevVal}` },
+      // SHORT (giro_baja): sqzVal > 0 AND sqzVal < sqzPrevVal — momentum positivo girando abajo
+      short: { firing: goldenTriangleShort, condition: `${sqz15m.sqzVal.toFixed(6)} > 0 → ${sqz15m.sqzVal > 0} | ${sqz15m.sqzVal.toFixed(6)} < ${sqz15m.sqzPrevVal.toFixed(6)} → ${sqz15m.sqzVal < sqz15m.sqzPrevVal}` },
+    },
+
+    throttle: {
+      long:  { key: gtKeyLong,  wouldNotify: !gtKeyLong  || parseInt(gtKeyLong)  < twentyMinsAgo },
+      short: { key: gtKeyShort, wouldNotify: !gtKeyShort || parseInt(gtKeyShort) < twentyMinsAgo },
+    },
+
+    mtf: { setup: mtf.setup, direction: mtf.direction, canTrade: mtf.canTrade, tf5m: mtf.tf5m, tf15m: mtf.tf15m, tf1h: mtf.tf1h, tf4h: mtf.tf4h },
+    scores: { long: cerebro.scoreLong, short: cerebro.scoreShort },
+    antiTrampa: { long: cerebro.antiTrampaLong, short: cerebro.antiTrampaShort },
   });
 }
