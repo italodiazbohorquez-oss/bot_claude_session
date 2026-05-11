@@ -47,9 +47,13 @@ export async function GET(_req: NextRequest) {
   }
 
   if (openPositions.length > 0) {
-    // 2a. Hay posición abierta — solo gestionar cierre de esa posición
+    // 2a. Hay posición abierta — gestionar cierre Y escanear el resto para notificaciones GT
     const managedSymbols = [...new Set(openPositions.map(p => p.symbol))];
+    const otherSymbols   = symbols.filter(s => !managedSymbols.includes(s));
     console.log(`[NEXUS] Gestionando ${managedSymbols.length} posiciones: ${managedSymbols.join(",")}`);
+    console.log(`[NEXUS] Escaneando GT en ${otherSymbols.length} símbolos restantes`);
+
+    // Gestionar posiciones abiertas
     for (const sym of managedSymbols) {
       try {
         const r = await runBotForSymbol(sym);
@@ -58,6 +62,21 @@ export async function GET(_req: NextRequest) {
       } catch (e) {
         console.error(`[NEXUS] ${sym} error:`, e);
         results.push({ symbol: sym, action: "UNCAUGHT_ERROR", details: { error: String(e) }, timestamp: new Date().toISOString() });
+      }
+    }
+
+    // Escanear el resto solo para alertas (GT + compresión), sin abrir posiciones
+    const BATCH_SIZE = 4;
+    for (let i = 0; i < otherSymbols.length; i += BATCH_SIZE) {
+      if (Date.now() - startTime > 50000) break;
+      const batch = otherSymbols.slice(i, i + BATCH_SIZE);
+      const batchResults = await Promise.allSettled(batch.map(s => runBotForSymbol(s, true)));
+      for (let j = 0; j < batch.length; j++) {
+        const r = batchResults[j];
+        if (r.status === "fulfilled") {
+          results.push(r.value);
+          console.log(`[NEXUS] scan(GT) ${batch[j]}: ${r.value.action}`);
+        }
       }
     }
   } else {
