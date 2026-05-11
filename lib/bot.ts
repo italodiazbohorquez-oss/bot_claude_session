@@ -71,7 +71,7 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
     return result;
   }
 
-  // Calcular indicadores base (necesarios tanto para gestión como para entrada)
+  // 3. Indicadores — calculados siempre, incluso con posición abierta (necesarios para watchlist)
   const sqz5m      = calcSqz(candles5m);
   const sqz15m     = calcSqz(candles15m);
   const sqz15mPrev = calcSqz(candles15m.slice(0, -1));
@@ -80,7 +80,44 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
   const sqz4h      = calcSqz(candles4h);
   const sqz4hPrev  = calcSqz(candles4h.slice(0, -1));
 
-  // 3. Gestión de posición abierta
+  const tf1hConsecutiveBull = countConsecutiveDir([sqz1h], "BULL");
+  const tf1hConsecutiveBear = countConsecutiveDir([sqz1h], "BEAR");
+
+  const rsiResult    = calcRsiSignal(candles1h);
+  const rsiBuySignal = rsiLongSignal(rsiResult);
+  const rsiSellSignal = rsiShortSignal(rsiResult);
+
+  const mtf = calcMtf({
+    sqz5m, sqz15m, sqz1h, sqz4h,
+    tf1hConsecutiveBull, tf1hConsecutiveBear,
+    rsiPivotLong: rsiBuySignal, rsiPivotShort: rsiSellSignal,
+  });
+
+  const cerebro = calcCerebro(candles15m, sqz1h, sqz4h, sqz15m, sqz15mPrev, candles1h, sqz5m);
+  let scoreLong  = cerebro.scoreLong;
+  let scoreShort = cerebro.scoreShort;
+  if (rsiResult.divergence === "BULL") scoreLong  = Math.min(9, scoreLong + 1);
+  if (rsiResult.divergence === "BEAR") scoreShort = Math.min(9, scoreShort + 1);
+
+  const adxStrength = sqz15m.adxStrength;
+  const tfTag = `|${mtf.tf5m}|${mtf.tf15m}|${mtf.tf1h}|${mtf.tf4h}`;
+
+  // Signal log base (siempre guardado, incluso para posiciones activas)
+  const signalLog = {
+    symbol,
+    timestamp: ts,
+    score_long: scoreLong,
+    score_short: scoreShort,
+    mtf_setup: `${mtf.setup}${tfTag}`,
+    rsi_zone: rsiResult.zoneNumeric,
+    rsi_pivot: rsiResult.pivot,
+    adx_value: sqz15m.adxValue,
+    adx_strength: adxStrength,
+    momentum_dir: sqz15m.momentumDir,
+    action_taken: "EVALUATING",
+  };
+
+  // 4. Gestión de posición abierta
   let openPosition: Position | null = null;
   let exchangeFetchError = false;
 
@@ -93,7 +130,6 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
 
   if (openPosition === null && !exchangeFetchError) {
     // Exchange confirmed no open position — auto-close any stale Supabase "OPEN" records
-    // (happens when TP/SL hit on exchange without the bot catching the close event)
     const stale = await getOpenTrade(symbol);
     if (stale?.id) {
       const curClose = candles15m[candles15m.length - 1].close;
@@ -126,10 +162,12 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
     }
   }
 
-      // Skip management for positions the bot didn't open (manually opened on exchange)
+  // Skip management for positions the bot didn't open (manually opened on exchange)
   if (openPosition && !exchangeFetchError) {
     const dbTrade = await getOpenTrade(symbol);
     if (!dbTrade) {
+      signalLog.action_taken = "MANUAL_POSITION";
+      await saveSignalLog(signalLog);
       result.action = "MANUAL_POSITION";
       result.details = { side: openPosition.side, size: openPosition.size, entryPrice: openPosition.entryPrice };
       return result;
@@ -143,7 +181,7 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
     const h1Reversed = (posLong && !h1Bull) || (!posLong && h1Bull);
     const h4Reversed = (posLong && !h4Bull) || (!posLong && h4Bull);
 
-        // Cierra solo cuando 1H Y 4H ambos confirman reversión
+    // Cierra solo cuando 1H Y 4H ambos confirman reversión
     if (h1Reversed && h4Reversed) {
       try {
         await placeOrder({
@@ -178,6 +216,8 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
         result.action = "CLOSE_ERROR";
         result.details = { error: String(e) };
       }
+      signalLog.action_taken = result.action;
+      await saveSignalLog(signalLog);
       return result;
     }
 
@@ -199,7 +239,11 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
       }
     }
 
-    result.action = h1Reversed || h4Reversed ? "HOLDING_TF_RETRACE" : "POSITION_ACTIVE";
+    const posAction = h1Reversed || h4Reversed ? "HOLDING_TF_RETRACE" : "POSITION_ACTIVE";
+    signalLog.action_taken = `${posAction}:${openPosition.side}`;
+    await saveSignalLog(signalLog);
+
+    result.action = posAction;
     result.details = {
       side: openPosition.side,
       size: openPosition.size,
@@ -208,40 +252,10 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
       h1Direction: h1Bull ? "BULL" : "BEAR",
       h4Direction: h4Bull ? "BULL" : "BEAR",
     };
-      return result;
-    }
+    return result;
+  }
 
-  // 4. MTF confluence
-  const tf1hConsecutiveBull = countConsecutiveDir([sqz1h], "BULL");
-  const tf1hConsecutiveBear = countConsecutiveDir([sqz1h], "BEAR");
-
-  const rsiResult = calcRsiSignal(candles1h);
-  const rsiBuySignal = rsiLongSignal(rsiResult);
-  const rsiSellSignal = rsiShortSignal(rsiResult);
-
-  const mtf = calcMtf({
-    sqz5m,
-    sqz15m,
-    sqz1h,
-    sqz4h,
-    tf1hConsecutiveBull,
-    tf1hConsecutiveBear,
-    rsiPivotLong: rsiBuySignal,
-    rsiPivotShort: rsiSellSignal,
-  });
-
-  // 5. Cerebro score + bonus divergencia RSI
-  const cerebro = calcCerebro(candles15m, sqz1h, sqz4h, sqz15m, sqz15mPrev, candles1h, sqz5m);
-  let scoreLong  = cerebro.scoreLong;
-  let scoreShort = cerebro.scoreShort;
-  if (rsiResult.divergence === "BULL") scoreLong  = Math.min(9, scoreLong + 1);
-  if (rsiResult.divergence === "BEAR") scoreShort = Math.min(9, scoreShort + 1);
-
-  const adxStrength = sqz15m.adxStrength;
-
-  // ── FILTROS DE ENTRADA ──────────────────────────────────────────────────────
-
-  // Gatillo 5M: bono +1 punto si el 5M confirma dirección
+  // 5. Filtros de entrada
   const gate5mLong  = sqz5m.sqzVal > 0;
   const gate5mShort = sqz5m.sqzVal < 0;
   const effectiveScoreLong  = Math.min(9, scoreLong  + (gate5mLong  ? 1 : 0));
@@ -268,8 +282,6 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
     return tfs.join(" + ") || "15M";
   }
 
-  // Entrada: el TRIÁNGULO DORADO es el disparador principal — el score es informativo, no un gate
-  // Condiciones: triángulo dorado (transición) + dirección MTF alineada + ADX no débil + anti-trampa
   const canOpenLong =
     goldenTriangleLong &&
     mtf.direction === "LONG" &&
@@ -291,24 +303,6 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
   // effectiveMinScore se mantiene para uso en alertas SETUP/COMPRESIÓN (no para entrada)
   const effectiveMinScore = mtf.setup === "ONE_TF" ? minScore + 1 : minScore;
 
-  // Codifica TF directions en mtf_setup para el dashboard (sin cambio de schema)
-  const tfTag = `|${mtf.tf5m}|${mtf.tf15m}|${mtf.tf1h}|${mtf.tf4h}`;
-
-  // Log signal
-  const signalLog = {
-    symbol,
-    timestamp: ts,
-    score_long: scoreLong,
-    score_short: scoreShort,
-    mtf_setup: `${mtf.setup}${tfTag}`,
-    rsi_zone: rsiResult.zoneNumeric,
-    rsi_pivot: rsiResult.pivot,
-    adx_value: sqz15m.adxValue,
-    adx_strength: adxStrength,
-    momentum_dir: sqz15m.momentumDir,
-    action_taken: "EVALUATING",
-  };
-
   let side: "LONG" | "SHORT" | null = null;
   let entryScore = 0;
   let setupType = "";
@@ -324,17 +318,16 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
   }
 
   if (!side) {
-    // Razón principal de bloqueo para el dashboard
     const dir = mtf.direction;
     let blockReason: string;
     if (dir === "LONG") {
-      if (!mtf.canTrade)           blockReason = `MTF_${mtf.setup}`;
+      if (!mtf.canTrade)               blockReason = `MTF_${mtf.setup}`;
       else if (adxStrength === "WEAK") blockReason = "ADX_WEAK";
       else if (cerebro.antiTrampaLong) blockReason = "ANTI_TRAP";
       else if (!goldenTriangleLong)    blockReason = "WAIT_GOLDEN_TRIANGLE";
       else                             blockReason = "UNKNOWN";
     } else if (dir === "SHORT") {
-      if (!mtf.canTrade)            blockReason = `MTF_${mtf.setup}`;
+      if (!mtf.canTrade)                blockReason = `MTF_${mtf.setup}`;
       else if (adxStrength === "WEAK")  blockReason = "ADX_WEAK";
       else if (cerebro.antiTrampaShort) blockReason = "ANTI_TRAP";
       else if (!goldenTriangleShort)    blockReason = "WAIT_GOLDEN_TRIANGLE";
@@ -350,10 +343,9 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
     const setupSide: "LONG" | "SHORT" = effectiveScoreLong >= effectiveScoreShort ? "LONG" : "SHORT";
     const h1h4Aligned = (sqz1h.sqzVal > 0 && sqz4h.sqzVal > 0) || (sqz1h.sqzVal < 0 && sqz4h.sqzVal < 0);
 
-    // Calcular precio actual y TP/SL aproximados para las alertas previas a entrada
-    const alertCandle  = candles15m[candles15m.length - 1];
+    const alertCandle     = candles15m[candles15m.length - 1];
     const alertPrevCandle = candles15m[candles15m.length - 2];
-    const alertRrDynamic = calcRrDynamic({ capital, riskPerTrade, rrRatio, atrMult, leverage }, cerebro.rrFactors);
+    const alertRrDynamic  = calcRrDynamic({ capital, riskPerTrade, rrRatio, atrMult, leverage }, cerebro.rrFactors);
     const { sl: alertSl, tp: alertTp } = calcSlTp({
       side: setupSide,
       close:    alertCandle.close,
@@ -368,7 +360,6 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
     });
 
     // Alerta SETUP FORMANDO: 1H+4H alineados, score ≥ 3 pero sin llegar al gatillo
-    // Throttle: 1 vez cada 3 horas por símbolo
     if (h1h4Aligned && bestScore >= 3 && bestScore < minScore) {
       const setupKey = `notify_setup_${symbol}`;
       const lastTs = await getBotConfig(setupKey);
@@ -389,8 +380,7 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
       }
     }
 
-    // Alerta COMPRESIÓN: HIGH squeeze activo (sqzOn) — precio coil, explosión inminente
-    // Se envía ANTES de que explote, no después. Throttle: 1 vez cada 3 horas por símbolo
+    // Alerta COMPRESIÓN: HIGH squeeze activo — precio coil, explosión inminente
     if (sqz15m.highSqz && sqz15m.sqzOn) {
       const throttleKey = `notify_sqz_${symbol}`;
       const lastNotifyTs = await getBotConfig(throttleKey);
@@ -399,14 +389,10 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
         await setBotConfig(throttleKey, String(Date.now()));
         notify(buildCompressionMsg({
           symbol,
-          scoreLong: effectiveScoreLong,
-          scoreShort: effectiveScoreShort,
-          highSqz: sqz15m.highSqz,
-          midSqz: sqz15m.midSqz,
-          sqzOff: sqz15m.sqzOff,
-          sqzOn: sqz15m.sqzOn,
-          adxStrength,
-          minScore,
+          scoreLong: effectiveScoreLong, scoreShort: effectiveScoreShort,
+          highSqz: sqz15m.highSqz, midSqz: sqz15m.midSqz,
+          sqzOff: sqz15m.sqzOff, sqzOn: sqz15m.sqzOn,
+          adxStrength, minScore,
           currentPrice: alertCandle.close,
           sl: alertSl, tp: alertTp,
           tf15m: mtf.tf15m, tf1h: mtf.tf1h, tf4h: mtf.tf4h,
@@ -477,7 +463,7 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
     result.action = "BOT_DISABLED";
     const gtTfs = calcGtTfs(side);
     result.details = { side, entryScore, setupType, sl, tp, close: curCandle.close, gtTimeframes: gtTfs };
-    // Dedup por vela de 15M — notificar solo una vez por evento (no repetir cada 60s)
+    // Dedup por vela de 15M — notificar solo una vez por evento
     const candleSlot = String(Math.floor(Date.now() / (15 * 60 * 1000)));
     const gtKey = `notify_gt_${symbol}_${side}`;
     const lastSlot = await getBotConfig(gtKey);
@@ -517,8 +503,6 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
     return result;
   }
 
-  // 8. Guardar en Supabase inmediatamente — antes de SL/TP
-
   // 8. Guardar en Supabase
   await saveTrade({
     symbol, side,
@@ -535,8 +519,8 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
 
   signalLog.action_taken = `OPENED_${side}`;
   await saveSignalLog(signalLog);
-  // 9. Colocar SL/TP — si falla, la posición está abierta sin stops → notificar
-     // 9. Colocar SL/TP — obtener positionId del exchange, luego colocar stops
+
+  // 9. Colocar SL/TP — obtener positionId del exchange, luego colocar stops
   try {
     const openPos = await getPosition(symbol);
     const positionId = openPos?.positionId ?? "";
@@ -546,7 +530,8 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
     console.error(`[Bot] SL/TP placement failed for ${symbol}: ${e}`);
     notify(`⚠️ <b>NEXUS IA · SIN STOPS</b>\n${symbol} ${side} abierto\nSL/TP fallaron: ${String(e).slice(0, 100)}\n⚡ Coloca SL/TP manualmente`).catch(() => {});
   }
-    notify(buildOpenedMsg({
+
+  notify(buildOpenedMsg({
     symbol, side,
     entryPrice: curCandle.close,
     sl, tp,
@@ -579,8 +564,6 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
     rrDynamic,
     score: entryScore,
     setupType,
-    persist15m: true,
-    gate5m: true,
   };
 
   return result;
