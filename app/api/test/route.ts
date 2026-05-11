@@ -86,7 +86,7 @@ export async function GET(_req: NextRequest) {
         rsiPivotShort: rsiSell,
       });
 
-      const cerebro = calcCerebro(c15m, sqz1h, sqz4h, sqz15m, sqz15mPrv, c1h, sqz5m);
+      const cerebro = calcCerebro(c15m, sqz1h, sqz4h, sqz15m, sqz15mPrv.sqzVal, c1h, sqz5m);
       let scoreLong  = cerebro.scoreLong;
       let scoreShort = cerebro.scoreShort;
       if (rsi.divergence === "BULL") scoreLong  = Math.min(9, scoreLong  + 1);
