@@ -35,9 +35,9 @@ export async function GET(req: Request) {
   });
   const cerebro = calcCerebro(c15m, sqz1h, sqz4h, sqz15m, sqz15m.sqzPrevVal, c1h, sqz5m);
 
-  // Golden triangle conditions (giro_alza / giro_baja)
-  const goldenTriangleLong  = sqz15m.sqzVal < 0 && sqz15m.sqzVal > sqz15m.sqzPrevVal;
-  const goldenTriangleShort = sqz15m.sqzVal > 0 && sqz15m.sqzVal < sqz15m.sqzPrevVal;
+  // Golden triangle — usa dos velas CERRADAS (sqzPrevVal vs sqzPrev2Val), igual que TradingView
+  const goldenTriangleLong  = sqz15m.sqzPrevVal < 0 && sqz15m.sqzPrevVal > sqz15m.sqzPrev2Val;
+  const goldenTriangleShort = sqz15m.sqzPrevVal > 0 && sqz15m.sqzPrevVal < sqz15m.sqzPrev2Val;
 
   // Throttle key state
   const gtKeyLong  = await getBotConfig(`notify_gt_${symbol}_LONG`);
@@ -55,9 +55,11 @@ export async function GET(req: Request) {
 
     // ── DIAGNÓSTICO TRIÁNGULO DORADO ──────────────────────────
     sqz15m: {
-      sqzVal:     sqz15m.sqzVal,
-      sqzPrevVal: sqz15m.sqzPrevVal,
-      diff:       sqz15m.sqzVal - sqz15m.sqzPrevVal,
+      sqzVal:      sqz15m.sqzVal,
+      sqzPrevVal:  sqz15m.sqzPrevVal,
+      sqzPrev2Val: sqz15m.sqzPrev2Val,
+      diff_forming_vs_closed: sqz15m.sqzVal     - sqz15m.sqzPrevVal,
+      diff_closed_vs_prev2:   sqz15m.sqzPrevVal - sqz15m.sqzPrev2Val,
       momentumDir: sqz15m.momentumDir,
       sqzOn:  sqz15m.sqzOn,
       sqzOff: sqz15m.sqzOff,
@@ -66,17 +68,17 @@ export async function GET(req: Request) {
       adxStrength: sqz15m.adxStrength,
     },
     sqz1h: {
-      sqzVal: sqz1h.sqzVal, sqzPrevVal: sqz1h.sqzPrevVal, momentumDir: sqz1h.momentumDir,
+      sqzVal: sqz1h.sqzVal, sqzPrevVal: sqz1h.sqzPrevVal, sqzPrev2Val: sqz1h.sqzPrev2Val, momentumDir: sqz1h.momentumDir,
     },
     sqz4h: {
-      sqzVal: sqz4h.sqzVal, sqzPrevVal: sqz4h.sqzPrevVal, momentumDir: sqz4h.momentumDir,
+      sqzVal: sqz4h.sqzVal, sqzPrevVal: sqz4h.sqzPrevVal, sqzPrev2Val: sqz4h.sqzPrev2Val, momentumDir: sqz4h.momentumDir,
     },
 
     goldenTriangle: {
-      // LONG  (giro_alza): sqzVal < 0 AND sqzVal > sqzPrevVal — momentum negativo girando arriba
-      long:  { firing: goldenTriangleLong,  condition: `${sqz15m.sqzVal.toFixed(6)} < 0 → ${sqz15m.sqzVal < 0} | ${sqz15m.sqzVal.toFixed(6)} > ${sqz15m.sqzPrevVal.toFixed(6)} → ${sqz15m.sqzVal > sqz15m.sqzPrevVal}` },
-      // SHORT (giro_baja): sqzVal > 0 AND sqzVal < sqzPrevVal — momentum positivo girando abajo
-      short: { firing: goldenTriangleShort, condition: `${sqz15m.sqzVal.toFixed(6)} > 0 → ${sqz15m.sqzVal > 0} | ${sqz15m.sqzVal.toFixed(6)} < ${sqz15m.sqzPrevVal.toFixed(6)} → ${sqz15m.sqzVal < sqz15m.sqzPrevVal}` },
+      // LONG  (giro_alza): sqzPrevVal < 0 AND sqzPrevVal > sqzPrev2Val — última vela cerrada girando al alza
+      long:  { firing: goldenTriangleLong,  condition: `${sqz15m.sqzPrevVal.toFixed(6)} < 0 → ${sqz15m.sqzPrevVal < 0} | ${sqz15m.sqzPrevVal.toFixed(6)} > ${sqz15m.sqzPrev2Val.toFixed(6)} → ${sqz15m.sqzPrevVal > sqz15m.sqzPrev2Val}` },
+      // SHORT (giro_baja): sqzPrevVal > 0 AND sqzPrevVal < sqzPrev2Val — última vela cerrada girando a la baja
+      short: { firing: goldenTriangleShort, condition: `${sqz15m.sqzPrevVal.toFixed(6)} > 0 → ${sqz15m.sqzPrevVal > 0} | ${sqz15m.sqzPrevVal.toFixed(6)} < ${sqz15m.sqzPrev2Val.toFixed(6)} → ${sqz15m.sqzPrevVal < sqz15m.sqzPrev2Val}` },
     },
 
     throttle: {

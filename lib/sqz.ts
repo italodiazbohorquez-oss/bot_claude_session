@@ -17,6 +17,7 @@ export interface SqzResult {
   diMinus: number;
   sqzVal: number;
   sqzPrevVal: number;
+  sqzPrev2Val: number;
   sqzOn: boolean;
   sqzOff: boolean;
   highSqz: boolean;
@@ -67,6 +68,7 @@ export function calcSqz(candles: Candle[]): SqzResult {
   const sqzLinReg = linreg(sqzInput, 20, 0);
   const sqzVal = last(sqzLinReg);
   const sqzPrevVal = prev(sqzLinReg, 1);
+  const sqzPrev2Val = prev(sqzLinReg, 2);
 
   // ADX
   const { adx: adxArr, diPlus: diPlusArr, diMinus: diMinusArr } = calcAdx(candles, 14);
@@ -97,6 +99,7 @@ export function calcSqz(candles: Candle[]): SqzResult {
     diMinus: isNaN(diMinusVal) ? 0 : diMinusVal,
     sqzVal: isNaN(sqzVal) ? 0 : sqzVal,
     sqzPrevVal: isNaN(sqzPrevVal) ? 0 : sqzPrevVal,
+    sqzPrev2Val: isNaN(sqzPrev2Val) ? 0 : sqzPrev2Val,
     sqzOn,
     sqzOff,
     highSqz,

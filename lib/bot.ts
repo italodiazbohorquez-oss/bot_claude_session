@@ -102,21 +102,21 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
   const effectiveScoreLong  = Math.min(9, scoreLong  + (gate5mLong  ? 1 : 0));
   const effectiveScoreShort = Math.min(9, scoreShort + (gate5mShort ? 1 : 0));
 
-  // giro_alza: momentum negativo pero subiendo → señal LONG (igual que screener HTML)
-  // giro_baja: momentum positivo pero bajando → señal SHORT
-  const goldenTriangleLong  = sqz15m.sqzVal < 0 && sqz15m.sqzVal > sqz15m.sqzPrevVal;
-  const goldenTriangleShort = sqz15m.sqzVal > 0 && sqz15m.sqzVal < sqz15m.sqzPrevVal;
+  // giro_alza / giro_baja — comparar las dos últimas velas CERRADAS (prev vs prev2),
+  // igual que TradingView. La vela n-1 aún está formando y su sqzVal es ruidoso.
+  const goldenTriangleLong  = sqz15m.sqzPrevVal < 0 && sqz15m.sqzPrevVal > sqz15m.sqzPrev2Val;
+  const goldenTriangleShort = sqz15m.sqzPrevVal > 0 && sqz15m.sqzPrevVal < sqz15m.sqzPrev2Val;
 
   function calcGtTfs(s: "LONG" | "SHORT"): string {
     const tfs: string[] = [];
     if (s === "LONG") {
-      if (sqz15m.sqzVal < 0 && sqz15m.sqzVal > sqz15m.sqzPrevVal) tfs.push("15M");
-      if (sqz1h.sqzVal  < 0 && sqz1h.sqzVal  > sqz1h.sqzPrevVal)  tfs.push("1H");
-      if (sqz4h.sqzVal  < 0 && sqz4h.sqzVal  > sqz4h.sqzPrevVal)  tfs.push("4H");
+      if (sqz15m.sqzPrevVal < 0 && sqz15m.sqzPrevVal > sqz15m.sqzPrev2Val) tfs.push("15M");
+      if (sqz1h.sqzPrevVal  < 0 && sqz1h.sqzPrevVal  > sqz1h.sqzPrev2Val)  tfs.push("1H");
+      if (sqz4h.sqzPrevVal  < 0 && sqz4h.sqzPrevVal  > sqz4h.sqzPrev2Val)  tfs.push("4H");
     } else {
-      if (sqz15m.sqzVal > 0 && sqz15m.sqzVal < sqz15m.sqzPrevVal) tfs.push("15M");
-      if (sqz1h.sqzVal  > 0 && sqz1h.sqzVal  < sqz1h.sqzPrevVal)  tfs.push("1H");
-      if (sqz4h.sqzVal  > 0 && sqz4h.sqzVal  < sqz4h.sqzPrevVal)  tfs.push("4H");
+      if (sqz15m.sqzPrevVal > 0 && sqz15m.sqzPrevVal < sqz15m.sqzPrev2Val) tfs.push("15M");
+      if (sqz1h.sqzPrevVal  > 0 && sqz1h.sqzPrevVal  < sqz1h.sqzPrev2Val)  tfs.push("1H");
+      if (sqz4h.sqzPrevVal  > 0 && sqz4h.sqzPrevVal  < sqz4h.sqzPrev2Val)  tfs.push("4H");
     }
     return tfs.join(" + ") || "15M";
   }
