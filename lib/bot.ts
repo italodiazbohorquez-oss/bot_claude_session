@@ -95,6 +95,56 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
   const adxStrength = sqz15m.adxStrength;
   const tfTag = `|${mtf.tf5m}|${mtf.tf15m}|${mtf.tf1h}|${mtf.tf4h}`;
 
+  // ── Triángulo dorado — detectado AQUÍ, antes del bloque de posición abierta,
+  // para que la notificación llegue incluso si ya hay una posición abierta en ese símbolo.
+  const gate5mLong  = sqz5m.sqzVal > 0;
+  const gate5mShort = sqz5m.sqzVal < 0;
+  const effectiveScoreLong  = Math.min(9, scoreLong  + (gate5mLong  ? 1 : 0));
+  const effectiveScoreShort = Math.min(9, scoreShort + (gate5mShort ? 1 : 0));
+
+  // giro_alza: momentum negativo pero subiendo → señal LONG (igual que screener HTML)
+  // giro_baja: momentum positivo pero bajando → señal SHORT
+  const goldenTriangleLong  = sqz15m.sqzVal < 0 && sqz15m.sqzVal > sqz15m.sqzPrevVal;
+  const goldenTriangleShort = sqz15m.sqzVal > 0 && sqz15m.sqzVal < sqz15m.sqzPrevVal;
+
+  function calcGtTfs(s: "LONG" | "SHORT"): string {
+    const tfs: string[] = [];
+    if (s === "LONG") {
+      if (sqz15m.sqzVal < 0 && sqz15m.sqzVal > sqz15m.sqzPrevVal) tfs.push("15M");
+      if (sqz1h.sqzVal  < 0 && sqz1h.sqzVal  > sqz1h.sqzPrevVal)  tfs.push("1H");
+      if (sqz4h.sqzVal  < 0 && sqz4h.sqzVal  > sqz4h.sqzPrevVal)  tfs.push("4H");
+    } else {
+      if (sqz15m.sqzVal > 0 && sqz15m.sqzVal < sqz15m.sqzPrevVal) tfs.push("15M");
+      if (sqz1h.sqzVal  > 0 && sqz1h.sqzVal  < sqz1h.sqzPrevVal)  tfs.push("1H");
+      if (sqz4h.sqzVal  > 0 && sqz4h.sqzVal  < sqz4h.sqzPrevVal)  tfs.push("4H");
+    }
+    return tfs.join(" + ") || "15M";
+  }
+
+  // Notificación: throttle de 20 min por símbolo/dirección (reemplaza candleSlot que podía quedar bloqueado)
+  const gtSide: "LONG" | "SHORT" | null = goldenTriangleLong ? "LONG" : goldenTriangleShort ? "SHORT" : null;
+  if (gtSide) {
+    const gtKey   = `notify_gt_${symbol}_${gtSide}`;
+    const lastGtTs = await getBotConfig(gtKey);
+    const twentyMinsAgo = Date.now() - 20 * 60 * 1000;
+    if (!lastGtTs || parseInt(lastGtTs) < twentyMinsAgo) {
+      await setBotConfig(gtKey, String(Date.now()));
+      const gtCandle = candles15m[candles15m.length - 1];
+      const gtPrev   = candles15m[candles15m.length - 2];
+      const gtRr     = calcRrDynamic({ capital, riskPerTrade, rrRatio, atrMult, leverage }, cerebro.rrFactors);
+      const { sl: gtSl, tp: gtTp } = calcSlTp({
+        side: gtSide, close: gtCandle.close, high: gtCandle.high, low: gtCandle.low,
+        prevHigh: gtPrev.high, prevLow: gtPrev.low,
+        atr7: cerebro.atr7, atr50: cerebro.atr50, atrMult, rrDynamic: gtRr,
+      });
+      const gtScore = gtSide === "LONG" ? effectiveScoreLong : effectiveScoreShort;
+      notify(buildGoldenTriangleMsg({
+        symbol, side: gtSide, score: gtScore, gtTimeframes: calcGtTfs(gtSide),
+        entryPrice: gtCandle.close, sl: gtSl, tp: gtTp, botPaused: !tradingEnabled,
+      })).catch(() => {});
+    }
+  }
+
   // Signal log base (siempre guardado, incluso para posiciones activas)
   const signalLog = {
     symbol,
@@ -248,59 +298,7 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
     return result;
   }
 
-  // 5. Filtros de entrada
-  const gate5mLong  = sqz5m.sqzVal > 0;
-  const gate5mShort = sqz5m.sqzVal < 0;
-  const effectiveScoreLong  = Math.min(9, scoreLong  + (gate5mLong  ? 1 : 0));
-  const effectiveScoreShort = Math.min(9, scoreShort + (gate5mShort ? 1 : 0));
-
-  // Triángulo dorado: giro_alza / giro_baja — igual que el screener HTML y TradingView
-  // giro_alza: momentum negativo pero subiendo → LONG inminente (vela previa a cruzar cero)
-  // giro_baja: momentum positivo pero bajando → SHORT inminente
-  const goldenTriangleLong  = sqz15m.sqzVal < 0 && sqz15m.sqzVal > sqz15m.sqzPrevVal;
-  const goldenTriangleShort = sqz15m.sqzVal > 0 && sqz15m.sqzVal < sqz15m.sqzPrevVal;
-
-  // Detectar en qué TFs está activo el triángulo dorado (misma lógica giro_alza/giro_baja por TF)
-  function calcGtTfs(s: "LONG" | "SHORT"): string {
-    const tfs: string[] = [];
-    if (s === "LONG") {
-      if (sqz15m.sqzVal < 0 && sqz15m.sqzVal > sqz15m.sqzPrevVal) tfs.push("15M");
-      if (sqz1h.sqzVal  < 0 && sqz1h.sqzVal  > sqz1h.sqzPrevVal)  tfs.push("1H");
-      if (sqz4h.sqzVal  < 0 && sqz4h.sqzVal  > sqz4h.sqzPrevVal)  tfs.push("4H");
-    } else {
-      if (sqz15m.sqzVal > 0 && sqz15m.sqzVal < sqz15m.sqzPrevVal) tfs.push("15M");
-      if (sqz1h.sqzVal  > 0 && sqz1h.sqzVal  < sqz1h.sqzPrevVal)  tfs.push("1H");
-      if (sqz4h.sqzVal  > 0 && sqz4h.sqzVal  < sqz4h.sqzPrevVal)  tfs.push("4H");
-    }
-    return tfs.join(" + ") || "15M";
-  }
-
-  // ── Notificación triángulo dorado — se envía SIEMPRE que aparezca, independientemente
-  // de si el bot puede operar o no. Dedup por vela de 15M (una vez por evento).
-  const gtNotifySide: "LONG" | "SHORT" | null = goldenTriangleLong ? "LONG" : goldenTriangleShort ? "SHORT" : null;
-  if (gtNotifySide) {
-    const gtScore = gtNotifySide === "LONG" ? effectiveScoreLong : effectiveScoreShort;
-    const gtTfs   = calcGtTfs(gtNotifySide);
-    const gtCandle = candles15m[candles15m.length - 1];
-    const gtPrev   = candles15m[candles15m.length - 2];
-    const gtRr     = calcRrDynamic({ capital, riskPerTrade, rrRatio, atrMult, leverage }, cerebro.rrFactors);
-    const { sl: gtSl, tp: gtTp } = calcSlTp({
-      side: gtNotifySide, close: gtCandle.close, high: gtCandle.high, low: gtCandle.low,
-      prevHigh: gtPrev.high, prevLow: gtPrev.low,
-      atr7: cerebro.atr7, atr50: cerebro.atr50, atrMult, rrDynamic: gtRr,
-    });
-    const candleSlot = String(Math.floor(Date.now() / (15 * 60 * 1000)));
-    const gtKey = `notify_gt_${symbol}_${gtNotifySide}`;
-    const lastSlot = await getBotConfig(gtKey);
-    if (lastSlot !== candleSlot) {
-      await setBotConfig(gtKey, candleSlot);
-      notify(buildGoldenTriangleMsg({
-        symbol, side: gtNotifySide, score: gtScore, gtTimeframes: gtTfs,
-        entryPrice: gtCandle.close, sl: gtSl, tp: gtTp, botPaused: !tradingEnabled,
-      })).catch(() => {});
-    }
-  }
-
+  // 5. Filtros de entrada (gate5m/effectiveScore/goldenTriangle ya calculados arriba)
   const canOpenLong =
     goldenTriangleLong &&
     mtf.direction === "LONG" &&
