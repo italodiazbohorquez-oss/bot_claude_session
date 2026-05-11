@@ -4,7 +4,7 @@ import { getBotConfig, setBotConfig } from "@/lib/supabase";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const ALLOWED_KEYS = ["capital", "min_score", "risk_per_trade", "symbols", "bot_enabled"];
+const ALLOWED_KEYS = ["capital", "min_score", "risk_per_trade", "symbols", "bot_enabled", "leverage"];
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -30,13 +30,16 @@ export async function POST(req: NextRequest) {
     }
 
     // Validate numeric keys
-    if (["capital", "min_score", "risk_per_trade"].includes(key)) {
+    if (["capital", "min_score", "risk_per_trade", "leverage"].includes(key)) {
       const num = parseFloat(strValue);
       if (isNaN(num) || num <= 0) {
         return NextResponse.json({ error: "Value must be a positive number" }, { status: 400 });
       }
       if (key === "min_score" && (num < 2 || num > 9)) {
         return NextResponse.json({ error: "min_score must be between 2 and 9" }, { status: 400 });
+      }
+      if (key === "leverage" && (num < 1 || num > 50)) {
+        return NextResponse.json({ error: "leverage must be between 1 and 50" }, { status: 400 });
       }
     }
 

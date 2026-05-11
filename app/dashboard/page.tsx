@@ -504,8 +504,10 @@ function RiskConfigPanel({ config, onSave, saving, saveMsg }: {
 }) {
   const [editCapital, setEditCapital] = useState(String(config.capital));
   const [editScore, setEditScore] = useState(String(config.minScore));
+  const [editLeverage, setEditLeverage] = useState(String(config.leverage));
   useEffect(() => { setEditCapital(String(config.capital)); }, [config.capital]);
   useEffect(() => { setEditScore(String(config.minScore)); }, [config.minScore]);
+  useEffect(() => { setEditLeverage(String(config.leverage)); }, [config.leverage]);
 
   return (
     <div className="glass col" style={{ padding: 22, gap: 18 }}>
@@ -539,8 +541,12 @@ function RiskConfigPanel({ config, onSave, saving, saveMsg }: {
       </div>
 
       <div className="col" style={{ gap: 8 }}>
-        <span className="t-eyebrow">Leverage</span>
-        <span className="t-mono" style={{ fontSize: 16, color: "var(--neon-amber)" }}>×{config.leverage}</span>
+        <div className="row between">
+          <label className="nx-label" style={{ marginBottom: 0 }}>Leverage</label>
+          <span className="t-mono" style={{ fontSize: 14, color: "var(--neon-amber)", fontWeight: 700 }}>×{editLeverage}</span>
+        </div>
+        <input className="nx-input" type="number" value={editLeverage} min="1" max="50" step="1"
+          onChange={e => setEditLeverage(e.target.value)}/>
       </div>
 
       <div className="col" style={{ gap: 6 }}>
@@ -580,7 +586,7 @@ function RiskConfigPanel({ config, onSave, saving, saveMsg }: {
       <button
         className="nx-btn nx-btn-primary"
         disabled={saving}
-        onClick={() => { onSave("capital", editCapital); onSave("min_score", editScore); }}
+        onClick={() => { onSave("capital", editCapital); onSave("min_score", editScore); onSave("leverage", editLeverage); }}
         style={{ justifyContent: "center", padding: "11px" }}
       >
         {saving ? "GUARDANDO..." : "GUARDAR CAMBIOS"}

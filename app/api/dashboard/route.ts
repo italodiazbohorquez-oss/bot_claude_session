@@ -12,12 +12,13 @@ export async function GET(_req: NextRequest) {
   const DEFAULT_SYMBOLS = "BTCUSDT,ETHUSDT,SOLUSDT,ADAUSDT,SUIUSDT,RENDERUSDT,AVAXUSDT,HYPEUSDT,TAOUSDT,DOTUSDT,CRVUSDT,KSMUSDT,HBARUSDT,LINKUSDT,UNIUSDT,BNBUSDT,NEARUSDT,AAVEUSDT,PENGUUSDT";
   const symbols = (process.env.SYMBOLS ?? DEFAULT_SYMBOLS).split(",").map(s => s.trim());
 
-  const [recentTrades, signalLogs, minScoreDb, capitalDb, botEnabledDb] = await Promise.allSettled([
+  const [recentTrades, signalLogs, minScoreDb, capitalDb, botEnabledDb, leverageDb] = await Promise.allSettled([
     getRecentTrades(10),
     getSignalLogs(20),
     getBotConfig("min_score"),
     getBotConfig("capital"),
     getBotConfig("bot_enabled"),
+    getBotConfig("leverage"),
   ]);
 
   const minScore = minScoreDb.status === "fulfilled" && minScoreDb.value
@@ -31,6 +32,10 @@ export async function GET(_req: NextRequest) {
   const botEnabled = botEnabledDb.status === "fulfilled"
     ? (botEnabledDb.value !== "false")
     : true;
+
+  const leverage = leverageDb.status === "fulfilled" && leverageDb.value
+    ? parseInt(leverageDb.value)
+    : parseInt(process.env.LEVERAGE ?? "5");
 
   // Fetch account, all positions (1 call), and live prices in parallel
   let account = null;
@@ -81,7 +86,7 @@ export async function GET(_req: NextRequest) {
       account,
       positions,
       prices,
-      config: { minScore, capital, symbols, leverage: parseInt(process.env.LEVERAGE ?? "5"), botEnabled },
+      config: { minScore, capital, symbols, leverage, botEnabled },
       recentTrades: recentTrades.status === "fulfilled" ? recentTrades.value : [],
       latestSignals,
       signalLogs: logs.slice(0, 10),
