@@ -282,6 +282,32 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
     return tfs.join(" + ") || "15M";
   }
 
+  // ── Notificación triángulo dorado — se envía SIEMPRE que aparezca, independientemente
+  // de si el bot puede operar o no. Dedup por vela de 15M (una vez por evento).
+  const gtNotifySide: "LONG" | "SHORT" | null = goldenTriangleLong ? "LONG" : goldenTriangleShort ? "SHORT" : null;
+  if (gtNotifySide) {
+    const gtScore = gtNotifySide === "LONG" ? effectiveScoreLong : effectiveScoreShort;
+    const gtTfs   = calcGtTfs(gtNotifySide);
+    const gtCandle = candles15m[candles15m.length - 1];
+    const gtPrev   = candles15m[candles15m.length - 2];
+    const gtRr     = calcRrDynamic({ capital, riskPerTrade, rrRatio, atrMult, leverage }, cerebro.rrFactors);
+    const { sl: gtSl, tp: gtTp } = calcSlTp({
+      side: gtNotifySide, close: gtCandle.close, high: gtCandle.high, low: gtCandle.low,
+      prevHigh: gtPrev.high, prevLow: gtPrev.low,
+      atr7: cerebro.atr7, atr50: cerebro.atr50, atrMult, rrDynamic: gtRr,
+    });
+    const candleSlot = String(Math.floor(Date.now() / (15 * 60 * 1000)));
+    const gtKey = `notify_gt_${symbol}_${gtNotifySide}`;
+    const lastSlot = await getBotConfig(gtKey);
+    if (lastSlot !== candleSlot) {
+      await setBotConfig(gtKey, candleSlot);
+      notify(buildGoldenTriangleMsg({
+        symbol, side: gtNotifySide, score: gtScore, gtTimeframes: gtTfs,
+        entryPrice: gtCandle.close, sl: gtSl, tp: gtTp, botPaused: !tradingEnabled,
+      })).catch(() => {});
+    }
+  }
+
   const canOpenLong =
     goldenTriangleLong &&
     mtf.direction === "LONG" &&
@@ -458,22 +484,10 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
   }
 
   // 7. Ejecutar orden de mercado
-  // Si kill switch activo: señal detectada pero no abrir posición
+  // Si kill switch activo: señal detectada pero no abrir posición (notificación ya enviada arriba)
   if (!tradingEnabled) {
     result.action = "BOT_DISABLED";
-    const gtTfs = calcGtTfs(side);
-    result.details = { side, entryScore, setupType, sl, tp, close: curCandle.close, gtTimeframes: gtTfs };
-    // Dedup por vela de 15M — notificar solo una vez por evento
-    const candleSlot = String(Math.floor(Date.now() / (15 * 60 * 1000)));
-    const gtKey = `notify_gt_${symbol}_${side}`;
-    const lastSlot = await getBotConfig(gtKey);
-    if (lastSlot !== candleSlot) {
-      await setBotConfig(gtKey, candleSlot);
-      notify(buildGoldenTriangleMsg({
-        symbol, side, score: entryScore, gtTimeframes: gtTfs,
-        entryPrice: curCandle.close, sl, tp, botPaused: true,
-      })).catch(() => {});
-    }
+    result.details = { side, entryScore, setupType, sl, tp, close: curCandle.close };
     return result;
   }
 
