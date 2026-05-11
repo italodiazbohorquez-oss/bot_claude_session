@@ -40,7 +40,7 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
 
   // Config dinámica
   const capital = await getConfig("capital", "CAPITAL", 1000);
-  const leverage = getEnvNum("LEVERAGE", 5);
+  const leverage = await getConfig("leverage", "LEVERAGE", 5);
   const riskPerTrade = await getConfig("risk_per_trade", "RISK_PER_TRADE", 1.0);
   const rrRatio = getEnvNum("RR_RATIO", 2.5);
   const atrMult = getEnvNum("ATR_MULT", 0.5);

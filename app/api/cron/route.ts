@@ -100,14 +100,23 @@ export async function GET(_req: NextRequest) {
       }
     }
 
-    // Encontrar la mejor señal por score
+    // Encontrar la mejor señal: prioridad = setup (PERFECT > TWO_TF > ONE_TF) luego score
+    const setupPriority = (setup: string) => {
+      if (setup.includes("PERFECT")) return 3;
+      if (setup.includes("TWO_TF")) return 2;
+      if (setup.includes("ONE_TF")) return 1;
+      return 0;
+    };
     let bestSymbol: string | null = null;
     let bestScore = 0;
+    let bestSetupPriority = -1;
     for (const r of scanResults) {
       if (r.action === "SIGNAL_READY") {
         const score = (r.details.entryScore as number) ?? 0;
-        if (score > bestScore) {
+        const sp = setupPriority((r.details.setupType as string) ?? "");
+        if (sp > bestSetupPriority || (sp === bestSetupPriority && score > bestScore)) {
           bestScore = score;
+          bestSetupPriority = sp;
           bestSymbol = r.symbol;
         }
       }
