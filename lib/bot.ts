@@ -107,27 +107,21 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
   const goldenTriangleLong  = sqz15m.sqzPrevVal < 0 && sqz15m.sqzPrevVal > sqz15m.sqzPrev2Val;
   const goldenTriangleShort = sqz15m.sqzPrevVal > 0 && sqz15m.sqzPrevVal < sqz15m.sqzPrev2Val;
 
+  // calcGtTfs: muestra 15M + 1H si 1H también confirma. 4H excluido (muy lento, genera falsos).
   function calcGtTfs(s: "LONG" | "SHORT"): string {
-    const tfs: string[] = [];
-    if (s === "LONG") {
-      if (sqz15m.sqzPrevVal < 0 && sqz15m.sqzPrevVal > sqz15m.sqzPrev2Val) tfs.push("15M");
-      if (sqz1h.sqzPrevVal  < 0 && sqz1h.sqzPrevVal  > sqz1h.sqzPrev2Val)  tfs.push("1H");
-      if (sqz4h.sqzPrevVal  < 0 && sqz4h.sqzPrevVal  > sqz4h.sqzPrev2Val)  tfs.push("4H");
-    } else {
-      if (sqz15m.sqzPrevVal > 0 && sqz15m.sqzPrevVal < sqz15m.sqzPrev2Val) tfs.push("15M");
-      if (sqz1h.sqzPrevVal  > 0 && sqz1h.sqzPrevVal  < sqz1h.sqzPrev2Val)  tfs.push("1H");
-      if (sqz4h.sqzPrevVal  > 0 && sqz4h.sqzPrevVal  < sqz4h.sqzPrev2Val)  tfs.push("4H");
-    }
-    return tfs.join(" + ") || "15M";
+    const tfs = ["15M"];
+    if (s === "LONG"  && sqz1h.sqzPrevVal < 0 && sqz1h.sqzPrevVal > sqz1h.sqzPrev2Val) tfs.push("1H");
+    if (s === "SHORT" && sqz1h.sqzPrevVal > 0 && sqz1h.sqzPrevVal < sqz1h.sqzPrev2Val) tfs.push("1H");
+    return tfs.join(" + ");
   }
 
-  // Notificación: throttle de 20 min por símbolo/dirección (reemplaza candleSlot que podía quedar bloqueado)
+  // Notificación 15M: throttle 45 min — garantiza máx 1 notificación por señal GT
   const gtSide: "LONG" | "SHORT" | null = goldenTriangleLong ? "LONG" : goldenTriangleShort ? "SHORT" : null;
   if (gtSide) {
-    const gtKey   = `notify_gt_${symbol}_${gtSide}`;
+    const gtKey    = `notify_gt_${symbol}_${gtSide}`;
     const lastGtTs = await getBotConfig(gtKey);
-    const twentyMinsAgo = Date.now() - 20 * 60 * 1000;
-    if (!lastGtTs || parseInt(lastGtTs) < twentyMinsAgo) {
+    const fortyFiveMinsAgo = Date.now() - 45 * 60 * 1000;
+    if (!lastGtTs || parseInt(lastGtTs) < fortyFiveMinsAgo) {
       await setBotConfig(gtKey, String(Date.now()));
       const gtCandle = candles15m[candles15m.length - 1];
       const gtPrev   = candles15m[candles15m.length - 2];
