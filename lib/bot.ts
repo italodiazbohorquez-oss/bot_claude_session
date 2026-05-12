@@ -107,15 +107,21 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
   const goldenTriangleLong  = sqz15m.sqzPrevVal < 0 && sqz15m.sqzPrevVal > sqz15m.sqzPrev2Val;
   const goldenTriangleShort = sqz15m.sqzPrevVal > 0 && sqz15m.sqzPrevVal < sqz15m.sqzPrev2Val;
 
-  // calcGtTfs: muestra 15M + 1H si 1H también confirma. 4H excluido (muy lento, genera falsos).
+  // Condiciones GT por TF (dos velas cerradas)
+  const gt1hLong  = sqz1h.sqzPrevVal < 0 && sqz1h.sqzPrevVal > sqz1h.sqzPrev2Val;
+  const gt1hShort = sqz1h.sqzPrevVal > 0 && sqz1h.sqzPrevVal < sqz1h.sqzPrev2Val;
+  const gt4hLong  = sqz4h.sqzPrevVal < 0 && sqz4h.sqzPrevVal > sqz4h.sqzPrev2Val;
+  const gt4hShort = sqz4h.sqzPrevVal > 0 && sqz4h.sqzPrevVal < sqz4h.sqzPrev2Val;
+
+  // calcGtTfs: 15M siempre base, agrega 1H y/o 4H si también confirman
   function calcGtTfs(s: "LONG" | "SHORT"): string {
     const tfs = ["15M"];
-    if (s === "LONG"  && sqz1h.sqzPrevVal < 0 && sqz1h.sqzPrevVal > sqz1h.sqzPrev2Val) tfs.push("1H");
-    if (s === "SHORT" && sqz1h.sqzPrevVal > 0 && sqz1h.sqzPrevVal < sqz1h.sqzPrev2Val) tfs.push("1H");
+    if (s === "LONG")  { if (gt1hLong)  tfs.push("1H"); if (gt4hLong)  tfs.push("4H"); }
+    if (s === "SHORT") { if (gt1hShort) tfs.push("1H"); if (gt4hShort) tfs.push("4H"); }
     return tfs.join(" + ");
   }
 
-  // Notificación 15M: throttle 45 min — garantiza máx 1 notificación por señal GT
+  // ── Notificación 15M (throttle 45 min — máx 1 notificación por señal GT)
   const gtSide: "LONG" | "SHORT" | null = goldenTriangleLong ? "LONG" : goldenTriangleShort ? "SHORT" : null;
   if (gtSide) {
     const gtKey    = `notify_gt_${symbol}_${gtSide}`;
@@ -131,63 +137,43 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
         prevHigh: gtPrev.high, prevLow: gtPrev.low,
         atr7: cerebro.atr7, atr50: cerebro.atr50, atrMult, rrDynamic: gtRr,
       });
-      const gtScore = gtSide === "LONG" ? effectiveScoreLong : effectiveScoreShort;
       notify(buildGoldenTriangleMsg({
-        symbol, side: gtSide, score: gtScore, gtTimeframes: calcGtTfs(gtSide),
+        symbol, side: gtSide, score: gtSide === "LONG" ? effectiveScoreLong : effectiveScoreShort,
+        gtTimeframes: calcGtTfs(gtSide),
         entryPrice: gtCandle.close, sl: gtSl, tp: gtTp, botPaused: !tradingEnabled,
       })).catch(() => {});
     }
   }
 
-  // ── Triángulo dorado 5M — alerta temprana (throttle 20 min)
-  const gt5mLong  = sqz5m.sqzPrevVal < 0 && sqz5m.sqzPrevVal > sqz5m.sqzPrev2Val;
-  const gt5mShort = sqz5m.sqzPrevVal > 0 && sqz5m.sqzPrevVal < sqz5m.sqzPrev2Val;
-  const gt5mSide: "LONG" | "SHORT" | null = gt5mLong ? "LONG" : gt5mShort ? "SHORT" : null;
-  if (gt5mSide) {
-    const key5m = `notify_gt5m_${symbol}_${gt5mSide}`;
-    const last5mTs = await getBotConfig(key5m);
-    const twentyMinsAgo5m = Date.now() - 20 * 60 * 1000;
-    if (!last5mTs || parseInt(last5mTs) < twentyMinsAgo5m) {
-      await setBotConfig(key5m, String(Date.now()));
-      const c5mLast = candles5m[candles5m.length - 1];
-      const c5mPrev = candles5m[candles5m.length - 2];
-      const rr5m = calcRrDynamic({ capital, riskPerTrade, rrRatio, atrMult, leverage }, cerebro.rrFactors);
-      const { sl: sl5m, tp: tp5m } = calcSlTp({
-        side: gt5mSide, close: c5mLast.close, high: c5mLast.high, low: c5mLast.low,
-        prevHigh: c5mPrev.high, prevLow: c5mPrev.low,
-        atr7: cerebro.atr7, atr50: cerebro.atr50, atrMult, rrDynamic: rr5m,
-      });
-      notify(buildGoldenTriangleMsg({
-        symbol, side: gt5mSide, score: gt5mSide === "LONG" ? effectiveScoreLong : effectiveScoreShort,
-        gtTimeframes: "5M", entryPrice: c5mLast.close, sl: sl5m, tp: tp5m, botPaused: !tradingEnabled,
-      })).catch(() => {});
-    }
-  }
-
-  // ── Triángulo dorado 1H — confirmación lenta (throttle 90 min)
-  const gt1hLong  = sqz1h.sqzPrevVal < 0 && sqz1h.sqzPrevVal > sqz1h.sqzPrev2Val;
-  const gt1hShort = sqz1h.sqzPrevVal > 0 && sqz1h.sqzPrevVal < sqz1h.sqzPrev2Val;
-  const gt1hSide: "LONG" | "SHORT" | null = gt1hLong ? "LONG" : gt1hShort ? "SHORT" : null;
-  if (gt1hSide) {
-    const key1h = `notify_gt1h_${symbol}_${gt1hSide}`;
-    const last1hTs = await getBotConfig(key1h);
-    const ninetyMinsAgo = Date.now() - 90 * 60 * 1000;
-    if (!last1hTs || parseInt(last1hTs) < ninetyMinsAgo) {
-      await setBotConfig(key1h, String(Date.now()));
+  // ── Notificación 1H + 4H combinados (ambos confirman → señal fuerte, throttle 120 min)
+  // Independiente de 15M — puede llegar antes o después que la señal de 15M
+  const gt1h4hSide: "LONG" | "SHORT" | null =
+    (gt1hLong  && gt4hLong)  ? "LONG"  :
+    (gt1hShort && gt4hShort) ? "SHORT" : null;
+  if (gt1h4hSide) {
+    const key1h4h    = `notify_gt1h4h_${symbol}_${gt1h4hSide}`;
+    const last1h4hTs = await getBotConfig(key1h4h);
+    const twoHoursAgo = Date.now() - 120 * 60 * 1000;
+    if (!last1h4hTs || parseInt(last1h4hTs) < twoHoursAgo) {
+      await setBotConfig(key1h4h, String(Date.now()));
       const c1hLast = candles1h[candles1h.length - 1];
       const c1hPrev = candles1h[candles1h.length - 2];
-      const rr1h = calcRrDynamic({ capital, riskPerTrade, rrRatio, atrMult, leverage }, cerebro.rrFactors);
-      const { sl: sl1h, tp: tp1h } = calcSlTp({
-        side: gt1hSide, close: c1hLast.close, high: c1hLast.high, low: c1hLast.low,
+      const rr1h4h  = calcRrDynamic({ capital, riskPerTrade, rrRatio, atrMult, leverage }, cerebro.rrFactors);
+      const { sl: sl1h4h, tp: tp1h4h } = calcSlTp({
+        side: gt1h4hSide, close: c1hLast.close, high: c1hLast.high, low: c1hLast.low,
         prevHigh: c1hPrev.high, prevLow: c1hPrev.low,
-        atr7: cerebro.atr7, atr50: cerebro.atr50, atrMult, rrDynamic: rr1h,
+        atr7: cerebro.atr7, atr50: cerebro.atr50, atrMult, rrDynamic: rr1h4h,
       });
       notify(buildGoldenTriangleMsg({
-        symbol, side: gt1hSide, score: gt1hSide === "LONG" ? effectiveScoreLong : effectiveScoreShort,
-        gtTimeframes: "1H", entryPrice: c1hLast.close, sl: sl1h, tp: tp1h, botPaused: !tradingEnabled,
+        symbol, side: gt1h4hSide, score: gt1h4hSide === "LONG" ? effectiveScoreLong : effectiveScoreShort,
+        gtTimeframes: "1H + 4H",
+        entryPrice: c1hLast.close, sl: sl1h4h, tp: tp1h4h, botPaused: !tradingEnabled,
       })).catch(() => {});
     }
   }
+  // 5M: en standby — descomentar cuando se quiera reactivar
+  // const gt5mLong  = sqz5m.sqzPrevVal < 0 && sqz5m.sqzPrevVal > sqz5m.sqzPrev2Val;
+  // const gt5mShort = sqz5m.sqzPrevVal > 0 && sqz5m.sqzPrevVal < sqz5m.sqzPrev2Val;
 
   // Signal log base (siempre guardado, incluso para posiciones activas)
   const signalLog = {
