@@ -102,16 +102,16 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
   const effectiveScoreLong  = Math.min(9, scoreLong  + (gate5mLong  ? 1 : 0));
   const effectiveScoreShort = Math.min(9, scoreShort + (gate5mShort ? 1 : 0));
 
-  // giro_alza / giro_baja — comparar las dos últimas velas CERRADAS (prev vs prev2),
-  // igual que TradingView. La vela n-1 aún está formando y su sqzVal es ruidoso.
-  const goldenTriangleLong  = sqz15m.sqzPrevVal < 0 && sqz15m.sqzPrevVal > sqz15m.sqzPrev2Val;
-  const goldenTriangleShort = sqz15m.sqzPrevVal > 0 && sqz15m.sqzPrevVal < sqz15m.sqzPrev2Val;
+  // giro_alza / giro_baja — vela formando (sqzVal) vs última cerrada (sqzPrevVal).
+  // Dispara en cuanto aparece la primera señal en el indicador, sin esperar cierre de vela.
+  const goldenTriangleLong  = sqz15m.sqzVal < 0 && sqz15m.sqzVal > sqz15m.sqzPrevVal;
+  const goldenTriangleShort = sqz15m.sqzVal > 0 && sqz15m.sqzVal < sqz15m.sqzPrevVal;
 
-  // Condiciones GT por TF (dos velas cerradas)
-  const gt1hLong  = sqz1h.sqzPrevVal < 0 && sqz1h.sqzPrevVal > sqz1h.sqzPrev2Val;
-  const gt1hShort = sqz1h.sqzPrevVal > 0 && sqz1h.sqzPrevVal < sqz1h.sqzPrev2Val;
-  const gt4hLong  = sqz4h.sqzPrevVal < 0 && sqz4h.sqzPrevVal > sqz4h.sqzPrev2Val;
-  const gt4hShort = sqz4h.sqzPrevVal > 0 && sqz4h.sqzPrevVal < sqz4h.sqzPrev2Val;
+  // Condiciones GT por TF (vela formando vs última cerrada)
+  const gt1hLong  = sqz1h.sqzVal < 0 && sqz1h.sqzVal > sqz1h.sqzPrevVal;
+  const gt1hShort = sqz1h.sqzVal > 0 && sqz1h.sqzVal < sqz1h.sqzPrevVal;
+  const gt4hLong  = sqz4h.sqzVal < 0 && sqz4h.sqzVal > sqz4h.sqzPrevVal;
+  const gt4hShort = sqz4h.sqzVal > 0 && sqz4h.sqzVal < sqz4h.sqzPrevVal;
 
   // calcGtTfs: 15M siempre base, agrega 1H y/o 4H si también confirman
   function calcGtTfs(s: "LONG" | "SHORT"): string {

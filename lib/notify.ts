@@ -79,14 +79,35 @@ export interface GoldenTriangleCtx {
 
 export function buildGoldenTriangleMsg(ctx: GoldenTriangleCtx): string {
   const { symbol, side, score, gtTimeframes, entryPrice, sl, tp, botPaused } = ctx;
-  const emoji = side === "LONG" ? "🟢" : "🔴";
-  const header = botPaused
-    ? `${emoji} <b>NEXUS IA · TRIÁNGULO DORADO (bot pausado)</b>`
-    : `${emoji} <b>NEXUS IA · TRIÁNGULO DORADO CONFIRMADO</b>`;
-  return `${header}
+
+  // Visual emphasis scales with number of confirmed timeframes
+  const tfCount = (gtTimeframes.match(/\+/g) || []).length + 1;
+
+  let headerEmoji: string;
+  let headerTitle: string;
+  let tfLine: string;
+
+  if (tfCount >= 3) {
+    // 15M + 1H + 4H — máxima confluencia
+    headerEmoji = "🌟";
+    headerTitle = botPaused ? "TRIÁNGULO DORADO · MAX CONFLUENCIA (bot pausado)" : "TRIÁNGULO DORADO · MAX CONFLUENCIA";
+    tfLine = `📐 <b><u>TF confirmado: ${gtTimeframes}</u></b>`;
+  } else if (tfCount === 2) {
+    // 15M+1H / 15M+4H / 1H+4H — señal reforzada, azul
+    headerEmoji = "🔵";
+    headerTitle = botPaused ? "TRIÁNGULO DORADO · DOBLE TF (bot pausado)" : "TRIÁNGULO DORADO · DOBLE TF";
+    tfLine = `📐 <u>TF confirmado: <b>${gtTimeframes}</b></u>`;
+  } else {
+    // Solo 15M — señal base
+    headerEmoji = side === "LONG" ? "🟢" : "🔴";
+    headerTitle = botPaused ? "TRIÁNGULO DORADO (bot pausado)" : "TRIÁNGULO DORADO CONFIRMADO";
+    tfLine = `📐 TF confirmado: <b>${gtTimeframes}</b>`;
+  }
+
+  return `${headerEmoji} <b>NEXUS IA · ${headerTitle}</b>
 ━━━━━━━━━━━━━━━━━━
 📊 <b>${symbol}</b> · ${side} · Score <b>${score}/9</b>
-📐 TF confirmado: <b>${gtTimeframes}</b>
+${tfLine}
 💵 Precio: <code>$${fmtPrice(entryPrice)}</code>
 🛑 SL aprox: <code>$${fmtPrice(sl)}</code>  (-${diffPct(entryPrice, sl)}%)
 🎯 TP aprox: <code>$${fmtPrice(tp)}</code>  (+${diffPct(entryPrice, tp)}%)${botPaused ? "\n⏸️ Reactiva el bot para operar" : ""}
