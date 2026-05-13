@@ -328,9 +328,11 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
     return result;
   }
 
-  // 5. Filtros de entrada (gate5m/effectiveScore/goldenTriangle ya calculados arriba)
+  // 5. Filtros de entrada — requiere 15M GT + 1H GT + gate 5M (solo para apertura de posición)
   const canOpenLong =
     goldenTriangleLong &&
+    gt1hLong &&
+    gate5mLong &&
     mtf.direction === "LONG" &&
     mtf.canTrade &&
     adxStrength !== "WEAK" &&
@@ -338,14 +340,16 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
 
   const canOpenShort =
     goldenTriangleShort &&
+    gt1hShort &&
+    gate5mShort &&
     mtf.direction === "SHORT" &&
     mtf.canTrade &&
     adxStrength !== "WEAK" &&
     !cerebro.antiTrampaShort;
 
-  // RSI pivot: también requiere triángulo dorado en 15M para confirmar
-  const rsiLongEntry  = rsiBuySignal  && rsiResult.zoneNumeric <= 45 && mtf.direction === "LONG"  && adxStrength !== "WEAK" && goldenTriangleLong;
-  const rsiShortEntry = rsiSellSignal && rsiResult.zoneNumeric >= 55 && mtf.direction === "SHORT" && adxStrength !== "WEAK" && goldenTriangleShort;
+  // RSI pivot: también requiere 15M GT + 1H GT + gate 5M
+  const rsiLongEntry  = rsiBuySignal  && rsiResult.zoneNumeric <= 45 && mtf.direction === "LONG"  && adxStrength !== "WEAK" && goldenTriangleLong && gt1hLong && gate5mLong;
+  const rsiShortEntry = rsiSellSignal && rsiResult.zoneNumeric >= 55 && mtf.direction === "SHORT" && adxStrength !== "WEAK" && goldenTriangleShort && gt1hShort && gate5mShort;
 
   // effectiveMinScore se mantiene para uso en alertas SETUP/COMPRESIÓN (no para entrada)
   const effectiveMinScore = mtf.setup === "ONE_TF" ? minScore + 1 : minScore;
@@ -371,13 +375,17 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
       if (!mtf.canTrade)               blockReason = `MTF_${mtf.setup}`;
       else if (adxStrength === "WEAK") blockReason = "ADX_WEAK";
       else if (cerebro.antiTrampaLong) blockReason = "ANTI_TRAP";
-      else if (!goldenTriangleLong)    blockReason = "WAIT_GOLDEN_TRIANGLE";
+      else if (!goldenTriangleLong)    blockReason = "WAIT_15M_GT";
+      else if (!gt1hLong)              blockReason = "WAIT_1H_GT";
+      else if (!gate5mLong)            blockReason = "WAIT_5M_GATE";
       else                             blockReason = "UNKNOWN";
     } else if (dir === "SHORT") {
       if (!mtf.canTrade)                blockReason = `MTF_${mtf.setup}`;
       else if (adxStrength === "WEAK")  blockReason = "ADX_WEAK";
       else if (cerebro.antiTrampaShort) blockReason = "ANTI_TRAP";
-      else if (!goldenTriangleShort)    blockReason = "WAIT_GOLDEN_TRIANGLE";
+      else if (!goldenTriangleShort)    blockReason = "WAIT_15M_GT";
+      else if (!gt1hShort)              blockReason = "WAIT_1H_GT";
+      else if (!gate5mShort)            blockReason = "WAIT_5M_GATE";
       else                              blockReason = "UNKNOWN";
     } else {
       blockReason = `MTF_${mtf.setup}`;
