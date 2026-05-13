@@ -827,6 +827,11 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState("");
+
+  async function handleLogout() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    window.location.href = "/login";
+  }
   const [nextRefresh, setNextRefresh] = useState(REFRESH_INTERVAL);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState("");
@@ -993,6 +998,24 @@ export default function Dashboard() {
 
         <div style={{ textAlign: "center", color: "var(--t-500)", fontSize: 10, padding: "12px 0 20px", fontFamily: "var(--font-mono)" }}>
           NEXUS IA v2 · Cerebro v21 · auto-refresh {REFRESH_INTERVAL}s · {data.timestamp}
+        </div>
+        <div style={{ textAlign: "center", paddingBottom: 20 }}>
+          <button
+            onClick={handleLogout}
+            style={{
+              background: "transparent",
+              border: "1px solid #333",
+              borderRadius: 6,
+              color: "#555",
+              padding: "5px 14px",
+              fontSize: 11,
+              cursor: "pointer",
+              fontFamily: "var(--font-mono)",
+              letterSpacing: 1,
+            }}
+          >
+            Cerrar sesión
+          </button>
         </div>
       </div>
     </div>
