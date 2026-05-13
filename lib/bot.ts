@@ -50,10 +50,10 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
   let candles5m: Candle[], candles15m: Candle[], candles1h: Candle[], candles4h: Candle[];
   try {
     [candles5m, candles15m, candles1h, candles4h] = await Promise.all([
-      getCandles(symbol, "5m", 200),
-      getCandles(symbol, "15m", 200),
-      getCandles(symbol, "1h", 200),
-      getCandles(symbol, "4h", 200),
+      getCandles(symbol, "5m", 100),
+      getCandles(symbol, "15m", 100),
+      getCandles(symbol, "1h", 100),
+      getCandles(symbol, "4h", 100),
     ]);
   } catch (e) {
     result.action = "ERROR_FETCH";

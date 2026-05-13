@@ -820,7 +820,7 @@ function MarketSentimentPanel({ symbols, latestSignals }: { symbols: string[]; l
 }
 
 // ── Main Dashboard ────────────────────────────────────────────────
-const REFRESH_INTERVAL = 10; // seconds
+const REFRESH_INTERVAL = 30; // seconds
 
 export default function Dashboard() {
   const [data, setData] = useState<DashboardData | null>(null);
