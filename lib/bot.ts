@@ -141,7 +141,7 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
         symbol, side: gtSide, score: gtSide === "LONG" ? effectiveScoreLong : effectiveScoreShort,
         gtTimeframes: calcGtTfs(gtSide),
         entryPrice: gtCandle.close, sl: gtSl, tp: gtTp, botPaused: !tradingEnabled,
-      })).catch(() => {});
+      }), symbol).catch(() => {});
     }
   }
 
@@ -168,7 +168,7 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
         symbol, side: gt1h4hSide, score: gt1h4hSide === "LONG" ? effectiveScoreLong : effectiveScoreShort,
         gtTimeframes: "1H + 4H",
         entryPrice: c1hLast.close, sl: sl1h4h, tp: tp1h4h, botPaused: !tradingEnabled,
-      })).catch(() => {});
+      }), symbol).catch(() => {});
     }
   }
   // 5M: en standby — descomentar cuando se quiera reactivar

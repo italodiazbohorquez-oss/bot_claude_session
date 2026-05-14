@@ -199,10 +199,12 @@ export function buildCompressionMsg(ctx: CompressionCtx): string {
 
 // ── Transport ─────────────────────────────────────────────────────────────────
 
-export async function sendTelegram(message: string): Promise<void> {
+// Símbolos que también se envían al chat prioritario (BTC y ETH)
+const PRIORITY_SYMBOLS = new Set(["BTCUSDT", "ETHUSDT"]);
+
+async function sendTelegramTo(chatId: string, message: string): Promise<void> {
   const token = process.env.TELEGRAM_BOT_TOKEN;
-  const chatId = process.env.TELEGRAM_CHAT_ID;
-  if (!token || !chatId) return;
+  if (!token) return;
   try {
     const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: "POST",
@@ -215,6 +217,12 @@ export async function sendTelegram(message: string): Promise<void> {
   } catch (e) {
     console.error("[Notify] Telegram error:", e);
   }
+}
+
+export async function sendTelegram(message: string): Promise<void> {
+  const chatId = process.env.TELEGRAM_CHAT_ID;
+  if (!chatId) return;
+  await sendTelegramTo(chatId, message);
 }
 
 // WhatsApp via CallMeBot (free, needs one-time registration at callmebot.com/blog/free-whatsapp-messages-callmebot)
@@ -234,6 +242,11 @@ export async function sendWhatsApp(message: string): Promise<void> {
   }
 }
 
-export async function notify(message: string): Promise<void> {
+// symbol opcional: si es BTC/ETH también envía al chat prioritario (TELEGRAM_CHAT_ID_PRIORITY)
+export async function notify(message: string, symbol?: string): Promise<void> {
   await sendTelegram(message);
+  if (symbol && PRIORITY_SYMBOLS.has(symbol)) {
+    const priorityChatId = process.env.TELEGRAM_CHAT_ID_PRIORITY;
+    if (priorityChatId) await sendTelegramTo(priorityChatId, message);
+  }
 }
