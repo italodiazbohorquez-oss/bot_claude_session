@@ -242,12 +242,13 @@ export async function sendWhatsApp(message: string): Promise<void> {
   }
 }
 
-// symbol opcional: si es BTC/ETH también envía al chat prioritario (TELEGRAM_CHAT_ID_PRIORITY)
+// BTC/ETH van solo al chat prioritario; el resto solo al chat principal
 export async function notify(message: string, symbol?: string): Promise<void> {
-  await sendTelegram(message);
   if (symbol && PRIORITY_SYMBOLS.has(symbol)) {
     const priorityChatId = process.env.TELEGRAM_CHAT_ID_PRIORITY;
     if (priorityChatId) await sendTelegramTo(priorityChatId, message);
+  } else {
+    await sendTelegram(message);
   }
 }
 
