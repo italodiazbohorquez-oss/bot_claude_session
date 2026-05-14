@@ -92,26 +92,36 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
   const effectiveScoreShort = Math.min(9, scoreShort + (gate5mShort ? 1 : 0));
 
   // giro_alza / giro_baja — vela formando (sqzVal) vs última cerrada (sqzPrevVal).
-  // Dispara en cuanto aparece la primera señal en el indicador, sin esperar cierre de vela.
+  // ── Condiciones para NOTIFICACIONES: velas CERRADAS (prev vs prev2)
+  // El valor de una vela cerrada no cambia → señal persiste 15 min enteros → cron nunca la pierde.
+  const gtNotifyLong  = sqz15m.sqzPrevVal < 0 && sqz15m.sqzPrevVal > sqz15m.sqzPrev2Val;
+  const gtNotifyShort = sqz15m.sqzPrevVal > 0 && sqz15m.sqzPrevVal < sqz15m.sqzPrev2Val;
+
+  const gtNotify1hLong  = sqz1h.sqzPrevVal < 0 && sqz1h.sqzPrevVal > sqz1h.sqzPrev2Val;
+  const gtNotify1hShort = sqz1h.sqzPrevVal > 0 && sqz1h.sqzPrevVal < sqz1h.sqzPrev2Val;
+  const gtNotify4hLong  = sqz4h.sqzPrevVal < 0 && sqz4h.sqzPrevVal > sqz4h.sqzPrev2Val;
+  const gtNotify4hShort = sqz4h.sqzPrevVal > 0 && sqz4h.sqzPrevVal < sqz4h.sqzPrev2Val;
+
+  // ── Condiciones para ENTRADA de posición: vela FORMANDO (sqzVal vs sqzPrevVal)
+  // Dispara en cuanto el histograma empieza a girar — máxima velocidad para precio de entrada.
   const goldenTriangleLong  = sqz15m.sqzVal < 0 && sqz15m.sqzVal > sqz15m.sqzPrevVal;
   const goldenTriangleShort = sqz15m.sqzVal > 0 && sqz15m.sqzVal < sqz15m.sqzPrevVal;
 
-  // Condiciones GT por TF (vela formando vs última cerrada)
   const gt1hLong  = sqz1h.sqzVal < 0 && sqz1h.sqzVal > sqz1h.sqzPrevVal;
   const gt1hShort = sqz1h.sqzVal > 0 && sqz1h.sqzVal < sqz1h.sqzPrevVal;
   const gt4hLong  = sqz4h.sqzVal < 0 && sqz4h.sqzVal > sqz4h.sqzPrevVal;
   const gt4hShort = sqz4h.sqzVal > 0 && sqz4h.sqzVal < sqz4h.sqzPrevVal;
 
-  // calcGtTfs: 15M siempre base, agrega 1H y/o 4H si también confirman
+  // calcGtTfs para notificaciones: usa condiciones de velas cerradas
   function calcGtTfs(s: "LONG" | "SHORT"): string {
     const tfs = ["15M"];
-    if (s === "LONG")  { if (gt1hLong)  tfs.push("1H"); if (gt4hLong)  tfs.push("4H"); }
-    if (s === "SHORT") { if (gt1hShort) tfs.push("1H"); if (gt4hShort) tfs.push("4H"); }
+    if (s === "LONG")  { if (gtNotify1hLong)  tfs.push("1H"); if (gtNotify4hLong)  tfs.push("4H"); }
+    if (s === "SHORT") { if (gtNotify1hShort) tfs.push("1H"); if (gtNotify4hShort) tfs.push("4H"); }
     return tfs.join(" + ");
   }
 
-  // ── Notificación 15M (throttle 45 min — máx 1 notificación por señal GT)
-  const gtSide: "LONG" | "SHORT" | null = goldenTriangleLong ? "LONG" : goldenTriangleShort ? "SHORT" : null;
+  // ── Notificación 15M (throttle 45 min) — usa condiciones de velas cerradas
+  const gtSide: "LONG" | "SHORT" | null = gtNotifyLong ? "LONG" : gtNotifyShort ? "SHORT" : null;
   if (gtSide) {
     const gtKey    = `notify_gt_${symbol}_${gtSide}`;
     const lastGtTs = await getBotConfig(gtKey);
@@ -137,8 +147,8 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
   // ── Notificación 1H + 4H combinados (ambos confirman → señal fuerte, throttle 120 min)
   // Independiente de 15M — puede llegar antes o después que la señal de 15M
   const gt1h4hSide: "LONG" | "SHORT" | null =
-    (gt1hLong  && gt4hLong)  ? "LONG"  :
-    (gt1hShort && gt4hShort) ? "SHORT" : null;
+    (gtNotify1hLong  && gtNotify4hLong)  ? "LONG"  :
+    (gtNotify1hShort && gtNotify4hShort) ? "SHORT" : null;
   if (gt1h4hSide) {
     const key1h4h    = `notify_gt1h4h_${symbol}_${gt1h4hSide}`;
     const last1h4hTs = await getBotConfig(key1h4h);
