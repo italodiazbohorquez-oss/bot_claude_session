@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runBotForSymbol, type BotRunResult } from "@/lib/bot";
 import { getAllPositions } from "@/lib/bitunix";
+import { checkUsdtDominanceGT } from "@/lib/usdtd";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,6 +15,9 @@ export async function GET(_req: NextRequest) {
 
   const startTime = Date.now();
   const results: BotRunResult[] = [];
+
+  // Verificar USDT dominance GT en paralelo con el resto de la inicialización
+  checkUsdtDominanceGT().catch(e => console.error("[NEXUS] USDT.D error:", e));
 
   // 1. Verificar estado del bot y posiciones abiertas
   const { getBotConfig } = await import("@/lib/supabase");

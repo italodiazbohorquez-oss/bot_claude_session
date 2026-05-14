@@ -250,3 +250,8 @@ export async function notify(message: string, symbol?: string): Promise<void> {
     if (priorityChatId) await sendTelegramTo(priorityChatId, message);
   }
 }
+
+export async function notifyPriority(message: string): Promise<void> {
+  const chatId = process.env.TELEGRAM_CHAT_ID_PRIORITY;
+  if (chatId) await sendTelegramTo(chatId, message);
+}
