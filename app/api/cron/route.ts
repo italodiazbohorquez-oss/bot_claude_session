@@ -16,8 +16,8 @@ export async function GET(_req: NextRequest) {
   const startTime = Date.now();
   const results: BotRunResult[] = [];
 
-  // Verificar USDT dominance GT en paralelo con el resto de la inicialización
-  checkUsdtDominanceGT().catch(e => console.error("[NEXUS] USDT.D error:", e));
+  // USDT.D dominance check — en standby, descomentar para reactivar
+  // checkUsdtDominanceGT().catch(e => console.error("[NEXUS] USDT.D error:", e));
 
   // 1. Verificar estado del bot y posiciones abiertas
   const { getBotConfig } = await import("@/lib/supabase");
