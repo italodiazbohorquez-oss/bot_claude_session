@@ -21,11 +21,12 @@ async function getExpectedToken(): Promise<string> {
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // Rutas siempre accesibles: login, auth API, cron (llamado externamente por Vercel)
+  // Rutas siempre accesibles: login, auth API, cron y webhooks externos
   if (
     pathname === "/login" ||
     pathname.startsWith("/api/auth") ||
-    pathname.startsWith("/api/cron")
+    pathname.startsWith("/api/cron") ||
+    pathname.startsWith("/api/webhook")
   ) {
     return NextResponse.next();
   }
