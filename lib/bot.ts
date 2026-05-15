@@ -252,7 +252,7 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
       const estPnl = priceDiff * stale.size;
       await updateTrade(stale.id, { status: "CLOSED", closed_at: ts, pnl: estPnl });
       console.log(`[Bot] Auto-closed stale Supabase trade for ${symbol} — TP/SL hit on exchange`);
-      notify(buildClosedMsg({ symbol, side: stale.side, pnl: estPnl, reason: "TP/SL hit (auto-sync)" })).catch(() => {});
+      notify(buildClosedMsg({ symbol, side: stale.side, pnl: estPnl, reason: "TP/SL hit (auto-sync)" }), symbol).catch(() => {});
     }
   } else if (openPosition === null && exchangeFetchError) {
     // Exchange API error — use Supabase fallback to avoid opening duplicate positions
@@ -324,7 +324,7 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
           side: openPosition.side,
           pnl: openPosition.unrealizedPnl,
           reason: `1H+4H Reversal → ${h4Bull ? "BULL" : "BEAR"}`,
-        })).catch(() => {});
+        }), symbol).catch(() => {});
       } catch (e) {
         result.action = "CLOSE_ERROR";
         result.details = { error: String(e) };
@@ -348,7 +348,7 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
       if (!lastHoldTs || parseInt(lastHoldTs) < twoHoursAgo) {
         await setBotConfig(holdKey, String(Date.now()));
         const pnlStr = `${openPosition.unrealizedPnl >= 0 ? "+" : ""}${openPosition.unrealizedPnl.toFixed(2)}`;
-        notify(`⏸️ <b>NEXUS IA · HOLDING ${symbol}</b>\n━━━━━━━━━━━━━━━━━━\n📊 <b>${symbol}</b> ${openPosition.side}\n🔄 ${holdMsg}\n💰 PnL actual: ${pnlStr} USDT\n👀 Esperando que ambos TF reviertan`).catch(() => {});
+        notify(`⏸️ <b>NEXUS IA · HOLDING ${symbol}</b>\n━━━━━━━━━━━━━━━━━━\n📊 <b>${symbol}</b> ${openPosition.side}\n🔄 ${holdMsg}\n💰 PnL actual: ${pnlStr} USDT\n👀 Esperando que ambos TF reviertan`, symbol).catch(() => {});
       }
     }
 
@@ -471,7 +471,7 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
           minScore,
           currentPrice: alertCandle.close,
           sl: alertSl, tp: alertTp,
-        })).catch(() => {});
+        }), symbol).catch(() => {});
       }
     }
 
@@ -491,7 +491,7 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
           currentPrice: alertCandle.close,
           sl: alertSl, tp: alertTp,
           tf15m: mtf.tf15m, tf1h: mtf.tf1h, tf4h: mtf.tf4h,
-        })).catch(() => {});
+        }), symbol).catch(() => {});
       }
     }
 
@@ -611,7 +611,7 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
     await placePositionSlTp({ symbol, positionId, sl, tp });
   } catch (e) {
     console.error(`[Bot] SL/TP placement failed for ${symbol}: ${e}`);
-    notify(`⚠️ <b>NEXUS IA · SIN STOPS</b>\n${symbol} ${side} abierto\nSL/TP fallaron: ${String(e).slice(0, 100)}\n⚡ Coloca SL/TP manualmente`).catch(() => {});
+    notify(`⚠️ <b>NEXUS IA · SIN STOPS</b>\n${symbol} ${side} abierto\nSL/TP fallaron: ${String(e).slice(0, 100)}\n⚡ Coloca SL/TP manualmente`, symbol).catch(() => {});
   }
 
   notify(buildOpenedMsg({
@@ -634,7 +634,7 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
     tf1h: mtf.tf1h,
     tf4h: mtf.tf4h,
     gtTimeframes: calcGtTfs(side),
-  })).catch(() => {});
+  }), symbol).catch(() => {});
 
   result.action = `OPENED_${side}`;
   result.details = {
