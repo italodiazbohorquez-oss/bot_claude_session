@@ -177,16 +177,67 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
   // ── Modo scan (signalOnly): salir antes de MTF, getPosition y queries de exchange/Supabase.
   // Ahorra ~30% de CPU por símbolo al omitir calcMtf(), countConsecutiveDir() y getPosition().
   if (signalOnly) {
+    // TF directions derivadas directo del sqz (sin MTF completo — suficiente para display)
+    const tf15mDir = sqz15m.sqzVal > 0 ? "BULL" : "BEAR";
+    const tf1hDir  = sqz1h.sqzVal  > 0 ? "BULL" : "BEAR";
+    const tf4hDir  = sqz4h.sqzVal  > 0 ? "BULL" : "BEAR";
+    const bestScore  = Math.max(effectiveScoreLong, effectiveScoreShort);
+    const setupSide: "LONG" | "SHORT" = effectiveScoreLong >= effectiveScoreShort ? "LONG" : "SHORT";
+    const alertC    = candles15m[candles15m.length - 1];
+    const alertPrev = candles15m[candles15m.length - 2];
+    const alertRr   = calcRrDynamic({ capital, riskPerTrade, rrRatio, atrMult, leverage }, cerebro.rrFactors);
+    const { sl: alertSl, tp: alertTp } = calcSlTp({
+      side: setupSide, close: alertC.close, high: alertC.high, low: alertC.low,
+      prevHigh: alertPrev.high, prevLow: alertPrev.low,
+      atr7: cerebro.atr7, atr50: cerebro.atr50, atrMult, rrDynamic: alertRr,
+    });
+
+    // Alerta SETUP FORMANDO (1H+4H alineados, score entre 3 y minScore)
+    const h1h4Aligned = (sqz1h.sqzVal > 0 && sqz4h.sqzVal > 0) || (sqz1h.sqzVal < 0 && sqz4h.sqzVal < 0);
+    if (h1h4Aligned && bestScore >= 3 && bestScore < minScore) {
+      const setupKey = `notify_setup_${symbol}`;
+      const lastTs = await getBotConfig(setupKey);
+      if (!lastTs || parseInt(lastTs) < Date.now() - 3 * 60 * 60 * 1000) {
+        await setBotConfig(setupKey, String(Date.now()));
+        notify(buildSetupMsg({
+          symbol, side: setupSide,
+          scoreLong: effectiveScoreLong, scoreShort: effectiveScoreShort,
+          tf15m: tf15mDir, tf1h: tf1hDir, tf4h: tf4hDir,
+          highSqz: sqz15m.highSqz, midSqz: sqz15m.midSqz,
+          sqzOff: sqz15m.sqzOff, sqzOn: sqz15m.sqzOn,
+          adxStrength, adxValue: sqz15m.adxValue,
+          minScore, currentPrice: alertC.close, sl: alertSl, tp: alertTp,
+        }), symbol).catch(() => {});
+      }
+    }
+
+    // Alerta COMPRESIÓN (HIGH squeeze + sqzOn)
+    if (sqz15m.highSqz && sqz15m.sqzOn) {
+      const throttleKey = `notify_sqz_${symbol}`;
+      const lastNotifyTs = await getBotConfig(throttleKey);
+      if (!lastNotifyTs || parseInt(lastNotifyTs) < Date.now() - 3 * 60 * 60 * 1000) {
+        await setBotConfig(throttleKey, String(Date.now()));
+        notify(buildCompressionMsg({
+          symbol,
+          scoreLong: effectiveScoreLong, scoreShort: effectiveScoreShort,
+          highSqz: sqz15m.highSqz, midSqz: sqz15m.midSqz,
+          sqzOff: sqz15m.sqzOff, sqzOn: sqz15m.sqzOn,
+          adxStrength, minScore,
+          currentPrice: alertC.close, sl: alertSl, tp: alertTp,
+          tf15m: tf15mDir, tf1h: tf1hDir, tf4h: tf4hDir,
+        }), symbol).catch(() => {});
+      }
+    }
+
+    // Detección de señal GT para selección de mejor activo en cron
     const gtLong  = goldenTriangleLong && gt1hLong && gate5mLong;
     const gtShort = goldenTriangleShort && gt1hShort && gate5mShort;
     const scanSide: "LONG" | "SHORT" | null = gtLong ? "LONG" : gtShort ? "SHORT" : null;
     if (scanSide) {
-      const curC  = candles15m[candles15m.length - 1];
-      const prevC = candles15m[candles15m.length - 2];
       const rrDyn = calcRrDynamic({ capital, riskPerTrade, rrRatio, atrMult, leverage }, cerebro.rrFactors);
       const { sl, tp } = calcSlTp({
-        side: scanSide, close: curC.close, high: curC.high, low: curC.low,
-        prevHigh: prevC.high, prevLow: prevC.low,
+        side: scanSide, close: alertC.close, high: alertC.high, low: alertC.low,
+        prevHigh: alertPrev.high, prevLow: alertPrev.low,
         atr7: cerebro.atr7, atr50: cerebro.atr50, atrMult, rrDynamic: rrDyn,
       });
       result.action = "SIGNAL_READY";
@@ -194,7 +245,7 @@ export async function runBotForSymbol(symbol: string, signalOnly = false): Promi
         side: scanSide,
         entryScore: scanSide === "LONG" ? effectiveScoreLong : effectiveScoreShort,
         setupType: `TWO_TF_GT_${scanSide}`,
-        sl, tp, close: curC.close,
+        sl, tp, close: alertC.close,
       };
     } else {
       result.action = "WAIT";
