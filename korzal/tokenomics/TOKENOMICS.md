@@ -1,37 +1,36 @@
 # KORZAL Protocol — Tokenomics
 
-## $KRZL — Token Principal
+> Fuente: Whitepaper v1.0 | korzal.io
+
+## $KRL — Token Principal
 
 ```
-Supply Total: 10,000,000 KRZL (fijo, no inflacionario)
+Supply Total: 10,000,000 KRL (fijo, sin inflación programada)
 Decimales: 9
 Blockchain: Solana
+Ticker: KRL
 ```
 
 ### Distribución
 
-| Asignación | % | Cantidad | Vesting |
-|------------|---|----------|---------|
-| Liquidez DEX | 30% | 3,000,000 | Sin lock (necesaria para cotizar) |
-| Treasury Proyecto | 25% | 2,500,000 | Por hitos (ver abajo) |
-| Comunidad / Ecosistema | 20% | 2,000,000 | 12 meses lineal |
-| Equipo Fundador | 15% | 1,500,000 | Cliff 6m + vesting 24m |
-| Advisors & Partners | 7% | 700,000 | Cliff 3m + vesting 12m |
-| Reserva Legal | 3% | 300,000 | Multisig, uso específico |
+| Asignación | % | Cantidad | Vesting / Condición |
+|------------|---|----------|---------------------|
+| Venta Pública (IDO) | 25% | 2,500,000 | Liberación inmediata al listar |
+| Liquidez del Protocolo | 20% | 2,000,000 | Bloqueado en smart contract |
+| Equipo y Fundadores | 15% | 1,500,000 | Cliff 12 meses + vesting 24 meses |
+| Ecosistema y Grants | 15% | 1,500,000 | Liberación trimestral, 3 años |
+| Reserva Estratégica | 10% | 1,000,000 | Multi-sig 5/9. Solo por gobernanza |
+| Recompensas Staking | 10% | 1,000,000 | Distribución automática, 4 años |
+| Marketing y Comunidad | 5% | 500,000 | Uso discrecional del equipo |
+| **TOTAL** | **100%** | **10,000,000** | |
 
-### Treasury por Hitos
-
-| Hito | Meta | KRZL Liberados | % Treasury |
-|------|------|----------------|------------|
-| 1 | MVP + 3 países (COL, CHL, MEX) | 500,000 | 20% |
-| 2 | 10,000 usuarios + $500k vol/mes | 625,000 | 25% |
-| 3 | 50,000 usuarios + 6 países | 750,000 | 30% |
-| 4 | CEX Top 20 + 200,000 usuarios | 625,000 | 25% |
+> El equipo no puede acceder a sus tokens durante los primeros 12 meses (cliff).
+> Los contratos de vesting son públicos y auditables en Solana Explorer.
 
 ### Mecanismo Deflacionario
 
 ```
-Cada fee cobrado en $KRZL:
+Cada fee cobrado en $KRL:
   50% → Proveedores de liquidez (incentivo)
   30% → Treasury del protocolo
   20% → Quemado permanentemente 🔥
@@ -58,39 +57,38 @@ Blockchain: Solana
 | Marketing Viral | 10% | 1,000,000,000 | Campañas, KOLs, memes |
 | Treasury KORZAL | 10% | 1,000,000,000 | Fondos para desarrollo |
 
-### Relación con $KRZL
+### Relación con $KRL
 
-- Convertible a $KRZL a tasa fija dentro del protocolo
+- Convertible a $KRL a tasa fija dentro del protocolo
 - 1% de cada tx $BALAM → treasury KORZAL
 - Sin utilidad técnica propia (honestidad = confianza)
-- Funciona como onboarding: usuario compra $BALAM → entra al ecosistema → descubre $KRZL
+- Onboarding: usuario compra $BALAM → entra al ecosistema → descubre $KRL
 
 ---
 
 ## Precio de Lanzamiento Estimado
 
-### $KRZL
+### $KRL (IDO)
 ```
-Liquidez inicial: 50,000 USDC + 3,000,000 KRZL
-Precio inicial:   $0.0167 por KRZL
-Market Cap inicial (circulante): ~$50,000 USD
-FDV inicial: ~$167,000 USD
+IDO: 2,500,000 KRL a precio de venta pública
+Liquidez inicial: 2,000,000 KRL bloqueados en contrato
 ```
 
 ### $BALAM
 ```
 Liquidez inicial: 10,000 USDC + 6,000,000,000 BALAM
 Precio inicial:   $0.0000017 por BALAM
-Market Cap inicial: ~$10,000 USD
 ```
 
 ---
 
 ## Seguridad y Transparencia
 
-- ✅ Mint authority revocada post-deployment (supply inmutable)
-- ✅ Freeze authority revocada (nadie puede congelar cuentas)
-- ✅ Treasury en multisig 3/5
-- ✅ Contratos verificados en Solscan
-- ✅ Auditoría de smart contracts antes del Hito 1
-- ✅ Código open-source en GitHub
+- Mint authority revocada post-deployment (supply inmutable)
+- Freeze authority revocada (nadie puede congelar cuentas)
+- Reserva estratégica en multisig 5/9
+- Timelock 48h en cambios críticos del protocolo
+- Contratos verificados en Solana Explorer / Solscan
+- Auditoría de smart contract por firma especializada (pre-lanzamiento)
+- Programa de bug bounty con recompensas en KRL
+- Código open-source en GitHub
