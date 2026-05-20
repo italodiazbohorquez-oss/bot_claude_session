@@ -107,15 +107,15 @@ Usuarios ganan $KRZL completando módulos educativos sobre finanzas personales, 
 ### 4.1 Token Principal — $KRZL
 
 ```
-Supply Total: 1,000,000,000 KRZL (fijo, no inflacionario)
+Supply Total: 10,000,000 KRZL (fijo, no inflacionario)
 
 Distribución:
-├── 30% Liquidez inicial DEX (300,000,000 KRZL)
-├── 25% Treasury del Proyecto (250,000,000 KRZL) *
-├── 20% Comunidad / Ecosistema (200,000,000 KRZL)
-├── 15% Equipo fundador (150,000,000 KRZL) **
-├──  7% Advisors & Partnerships (70,000,000 KRZL)
-└──  3% Reserve fondo legal (30,000,000 KRZL)
+├── 30% Liquidez inicial DEX (3,000,000 KRZL)
+├── 25% Treasury del Proyecto (2,500,000 KRZL) *
+├── 20% Comunidad / Ecosistema (2,000,000 KRZL)
+├── 15% Equipo fundador (1,500,000 KRZL) **
+├──  7% Advisors & Partnerships (700,000 KRZL)
+└──  3% Reserve fondo legal (300,000 KRZL)
 
 * Liberado por hitos (ver sección 4.3)
 ** Vesting 24 meses, cliff 6 meses
@@ -153,22 +153,22 @@ Distribución:
 ### 4.3 Vesting del Treasury por Hitos
 
 ```
-Treasury: 250,000,000 KRZL (bloqueados en smart contract)
+Treasury: 2,500,000 KRZL (bloqueados en smart contract)
 
 HITO 1 — MVP + 3 países operativos
-  Libera: 50,000,000 KRZL (20%)
+  Libera: 500,000 KRZL (20%)
   Meta: App funcional en Colombia, Chile, México
 
 HITO 2 — 10,000 usuarios activos
-  Libera: 62,500,000 KRZL (25%)
+  Libera: 625,000 KRZL (25%)
   Meta: Volumen mensual > $500,000 USD
 
 HITO 3 — 50,000 usuarios + 6 países
-  Libera: 75,000,000 KRZL (30%)
+  Libera: 750,000 KRZL (30%)
   Meta: Expansión a Perú, Argentina, Venezuela, Brasil
 
 HITO 4 — CEX Listing + 200,000 usuarios
-  Libera: 62,500,000 KRZL (25%)
+  Libera: 625,000 KRZL (25%)
   Meta: Listing en exchange top 20
 
 Mecanismo: multisig 3/5 entre equipo + advisors independientes

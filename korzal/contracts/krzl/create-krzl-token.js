@@ -43,7 +43,7 @@ const TOKEN_CONFIG = {
   name: "KORZAL Protocol",
   symbol: "KRZL",
   decimals: 9,
-  totalSupply: 1_000_000_000, // 1 billón
+  totalSupply: 10_000_000, // 10 millones
 
   // Subir imagen y metadata a IPFS primero (ver upload-metadata.js)
   metadataUri: process.env.KRZL_METADATA_URI || "",

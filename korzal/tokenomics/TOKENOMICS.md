@@ -3,7 +3,7 @@
 ## $KRZL — Token Principal
 
 ```
-Supply Total: 1,000,000,000 KRZL (fijo, no inflacionario)
+Supply Total: 10,000,000 KRZL (fijo, no inflacionario)
 Decimales: 9
 Blockchain: Solana
 ```
@@ -12,21 +12,21 @@ Blockchain: Solana
 
 | Asignación | % | Cantidad | Vesting |
 |------------|---|----------|---------|
-| Liquidez DEX | 30% | 300,000,000 | Sin lock (necesaria para cotizar) |
-| Treasury Proyecto | 25% | 250,000,000 | Por hitos (ver abajo) |
-| Comunidad / Ecosistema | 20% | 200,000,000 | 12 meses lineal |
-| Equipo Fundador | 15% | 150,000,000 | Cliff 6m + vesting 24m |
-| Advisors & Partners | 7% | 70,000,000 | Cliff 3m + vesting 12m |
-| Reserva Legal | 3% | 30,000,000 | Multisig, uso específico |
+| Liquidez DEX | 30% | 3,000,000 | Sin lock (necesaria para cotizar) |
+| Treasury Proyecto | 25% | 2,500,000 | Por hitos (ver abajo) |
+| Comunidad / Ecosistema | 20% | 2,000,000 | 12 meses lineal |
+| Equipo Fundador | 15% | 1,500,000 | Cliff 6m + vesting 24m |
+| Advisors & Partners | 7% | 700,000 | Cliff 3m + vesting 12m |
+| Reserva Legal | 3% | 300,000 | Multisig, uso específico |
 
 ### Treasury por Hitos
 
 | Hito | Meta | KRZL Liberados | % Treasury |
 |------|------|----------------|------------|
-| 1 | MVP + 3 países (COL, CHL, MEX) | 50,000,000 | 20% |
-| 2 | 10,000 usuarios + $500k vol/mes | 62,500,000 | 25% |
-| 3 | 50,000 usuarios + 6 países | 75,000,000 | 30% |
-| 4 | CEX Top 20 + 200,000 usuarios | 62,500,000 | 25% |
+| 1 | MVP + 3 países (COL, CHL, MEX) | 500,000 | 20% |
+| 2 | 10,000 usuarios + $500k vol/mes | 625,000 | 25% |
+| 3 | 50,000 usuarios + 6 países | 750,000 | 30% |
+| 4 | CEX Top 20 + 200,000 usuarios | 625,000 | 25% |
 
 ### Mecanismo Deflacionario
 
@@ -71,8 +71,8 @@ Blockchain: Solana
 
 ### $KRZL
 ```
-Liquidez inicial: 50,000 USDC + 300,000,000 KRZL
-Precio inicial:   $0.000167 por KRZL
+Liquidez inicial: 50,000 USDC + 3,000,000 KRZL
+Precio inicial:   $0.0167 por KRZL
 Market Cap inicial (circulante): ~$50,000 USD
 FDV inicial: ~$167,000 USD
 ```
